@@ -15,6 +15,11 @@ void UnitreeMotor::enable()
     std::cout << "Unitree Motor " << id_ << " enabled." << std::endl;
 }
 
+void UnitreeMotor::disable()
+{
+    std::cout << "Unitree Motor " << id_ << " disabled." << std::endl;
+}
+
 void UnitreeMotor::setPosition(double position)
 {
     position_ = position;

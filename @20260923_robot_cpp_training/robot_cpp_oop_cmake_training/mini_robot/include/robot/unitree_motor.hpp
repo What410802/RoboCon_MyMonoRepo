@@ -9,6 +9,7 @@ public:
     explicit UnitreeMotor(int id);
 
     void enable() override;
+    void disable() override;
     void setPosition(double position) override;
     double getPosition() const override;
 

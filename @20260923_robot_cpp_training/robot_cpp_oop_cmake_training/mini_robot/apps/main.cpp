@@ -15,5 +15,6 @@ int main()
     robot.initialize();
     robot.move(2.0);
     robot.printStatus();
+    robot.shutdown();
     return 0;
 }

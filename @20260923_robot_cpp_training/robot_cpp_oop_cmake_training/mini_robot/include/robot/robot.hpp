@@ -9,6 +9,7 @@ public:
     Robot(Motor& left_motor, Motor& right_motor);
 
     void initialize();
+    void shutdown();
     void move(double position);
     void printStatus() const;
 

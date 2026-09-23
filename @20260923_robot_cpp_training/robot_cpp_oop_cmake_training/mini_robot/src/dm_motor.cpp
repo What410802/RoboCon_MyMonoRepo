@@ -15,6 +15,11 @@ void DMMotor::enable()
     std::cout << "DM Motor " << id_ << " enabled." << std::endl;
 }
 
+void DMMotor::disable()
+{
+    std::cout << "DM Motor " << id_ << " disabled." << std::endl;
+}
+
 void DMMotor::setPosition(double position)
 {
     position_ = position;

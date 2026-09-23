@@ -17,6 +17,13 @@ void Robot::initialize()
     right_motor_.enable();
 }
 
+void Robot::shutdown()
+{
+    std::cout << "Robot shutting down..." << std::endl << std::endl;
+    left_motor_.disable();
+    right_motor_.disable();
+}
+
 void Robot::move(double position)
 {
     std::cout << std::endl << "Set robot target position: " << std::fixed
