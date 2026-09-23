@@ -69,5 +69,7 @@
 	```
 	是否有区别？
 
+- 坑点：在添加dm电机后，别忘了修改`CMakeLists.txt`。
+
 - 【杂项】在VSCode中将C++语法高亮设置正确：
 	[complete]

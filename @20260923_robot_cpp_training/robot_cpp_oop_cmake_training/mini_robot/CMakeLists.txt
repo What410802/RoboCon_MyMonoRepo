@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(robot_core
+    src/dji_motor.cpp
     src/dm_motor.cpp
     src/unitree_motor.cpp
     src/robot.cpp

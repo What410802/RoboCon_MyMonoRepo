@@ -1,3 +1,4 @@
+#include "robot/dji_motor.hpp"
 #include "robot/dm_motor.hpp"
 #include "robot/robot.hpp"
 #include "robot/unitree_motor.hpp"
@@ -8,8 +9,9 @@ int main()
 {
     std::cout << "=== Mini Robot Demo ===" << std::endl << std::endl;
 
+    robot::DJIMotor right_motor(3);
     robot::DMMotor left_motor(1);
-    robot::UnitreeMotor right_motor(2);
+    // robot::UnitreeMotor right_motor(2);
     robot::Robot robot(left_motor, right_motor);
 
     robot.initialize();
