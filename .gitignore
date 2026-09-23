@@ -1,0 +1,11 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Binaries
+@20260923_robot_cpp_training/robot_cpp_oop_cmake_training/examples/**/demo
+@20260923_robot_cpp_training/robot_cpp_oop_cmake_training/mini_robot/robot_demo
+@20260923_robot_cpp_training/robot_cpp_oop_cmake_training/mini_robot/robot_demo_manual
+
+build/
+build_test/

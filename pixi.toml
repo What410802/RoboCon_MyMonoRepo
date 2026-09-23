@@ -1,0 +1,14 @@
+[workspace]
+authors = ["What410802 <what410802@126.com>"]
+channels = ["conda-forge"]
+name = "MyMonoRepo.d"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[pypi-options]
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+
+
+[tasks]
+
+[dependencies]
