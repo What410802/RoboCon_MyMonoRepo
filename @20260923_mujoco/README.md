@@ -250,7 +250,7 @@ pixi run @20260923_mujoco/cpp/build/dog_sim @20260923_mujoco/scenes/flat_scene_r
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）
 - [x] 任务 2：URDF→MJCF、平地场景、零力矩静止趴卧、力矩执行器
-- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中）
+- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中：研读笔记已写完 → [`../docs/unitree-mujoco-notes.md`](../docs/unitree-mujoco-notes.md)，线程/通信细节展开在 [`../docs/unitree-mujoco-threads.md`](../docs/unitree-mujoco-threads.md)）
 - [ ] 任务 4（选做）：用 C++ 重做（进行中：工具链、模型加载、静止判定已复现）
 
 任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/unitree-mujoco-notes.md` → ③ Python 侧按新结构重构（`scripts/` 里与仿真/可视化直接相关的代码迁到 `python/`，`agent_scripts/`、`onetime_tools/` 留在 `scripts/`）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。
