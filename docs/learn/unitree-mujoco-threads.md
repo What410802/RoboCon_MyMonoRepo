@@ -45,7 +45,7 @@ flowchart TB
 | 进程 | 谁创建 | 线程清单 | 证据 |
 |---|---|---|---|
 | ① C++ 仿真器 `./unitree_mujoco` | 用户（`-r`/`-s` 选机器人/场景） | 主线程、`PhysicsThread`、`UnitreeSdk2BridgeThread`、桥的 1 kHz `RecurrentThread`、**每个 publisher 1 个发布线程**、DDS 库内线程 | `main.cc:695`（桥线程）、`:698`（物理线程）、`:701`（RenderLoop）、`bridge.h:170-171`（1 kHz）；发布线程来自 `RealTimePublisher` 构造函数里的 `std::thread(&RealTimePublisher::publishingLoop, this)`（`unitree_sdk2: include/unitree/dds_wrapper/common/Publisher.h`） |
-| ② Python 仿真器 `python3 unitree_mujoco.py` | 用户 | 主线程（很快结束）、viewer UI 守护线程、`SimulationThread`、`PhysicsViewerThread`、3 个 `RecurrentThread`、`ch_reader` 守护线程、DDS 库内线程 | `unitree_mujoco.py:38`（SimulationThread）、`:70`（PhysicsViewerThread）；UI 线程见 conda 包里的 `mujoco/viewer.py:575`、`:586`；3 个定时器见 `unitree_sdk2py_bridge.py:63`、`:71`、`:81`；`ch_reader` 见 `unitree_sdk2py/core/channel.py`（`queueLen > 0` 时 `Thread(..., name="ch_reader", daemon=True)`） |
+| ② Python 仿真器 `python3 unitree_mujoco.py` | 用户 | 主线程（很快结束）、viewer UI 守护线程、`SimulationThread`、`PhysicsViewerThread`、3 个 `RecurrentThread`、`ch_reader` 守护线程、DDS 库内线程 | `unitree_mujoco.py:38`（SimulationThread）、`:70`（PhysicsViewerThread）；UI 线程见 conda 包里的 `mujoco/viewer.py:575`、`:586`；3 个定时器见 `unitree_sdk2py_bridge.py:63`、`:71`、`:81`；`ch_reader` 见 `unitree_sdk2py/core/channel.py`（`queueLen > 0` 时 `Thread(..., name="ch_reader", daemon=True)`）；本机 2026-09-25 实测该进程共 **8 个线程**（多出的是被动 viewer 的内部线程 `Thread-1 (_launch_internal)`） |
 | ③ C++ 控制程序 `example/cpp/stand_go2.cpp` | 用户 | 主线程 + `CreateRecurrentThreadEx("writebasiccmd", …, int(dt*1000000), …)` 定时线程 + DDS 库内线程 | `example/cpp/stand_go2.cpp:98` |
 | ④ Python 控制程序 `example/python/stand_go2.py` | 用户 | 只有主线程：`while True` + `time.sleep` 自己节拍 | `example/python/stand_go2.py:53`、`:86` |
 
@@ -53,7 +53,7 @@ flowchart TB
 
 - **"三线程"只是业务线**（物理 / UI / DDS 桥），不是线程总数。C++ 侧光是 publisher 就再带 3 个线程（`lowstate`、`highstate`、`wireless`；G1 另有 `bmsstate`、`secondary_imu` 两个），再加 SDK 与中间件内部线程，实际线程数 7 个以上。
 - **Python 侧的发布没有后台线程**：`ChannelPublisher.Write()` 直接调 `cyclonedds` 写（`unitree_sdk2py/core/channel.py` 的 `__Writer.Write`），周期由 `RecurrentThread` 提供。所以"C++ 有发布线程、Python 没有"是一条真实的结构差异。
-- **Python 侧的订阅**因为有队列（`Init(self.LowCmdHandler, 10)`）而多一个 `ch_reader` 守护线程，回调跑在它上面；C++ 侧未逐行核实（见 §10）。
+- **Python 侧的订阅**因为有队列（`Init(self.LowCmdHandler, 10)`）而多一个 `ch_reader` 守护线程，回调跑在它上面；C++ 侧同构（带队列 → SDK 自建线程 `rlsnr`，`queueLen=0` 才走 DDS 接收线程 `recvUC`，见 §10）。
 
 ## 2. DDS 接口与消息（两版共用）
 
@@ -126,7 +126,7 @@ flowchart LR
 | `BridgeThread` | 等 `d`、`ChannelFactory::Init`、选 IDL 建桥、之后空转 | 无（轮询 + `sleep`） | `main.cc:573-617`、`:576-583`、`:598-609`、`:613-615` |
 | 1 kHz 线程 | 读写 `mjData`（`ctrl` 与 `sensordata`）、填三种状态消息、读手柄 | 只拿 `lowcmd->mutex_` 与 publisher 的 `trylock` | `bridge.h:170-171`、`:177`、`:180-185`、`:190-194`、`:225` |
 | 发布线程 ×N | 复制 `msg_` 并 `Write()` | `mutex_` + `turn_` 原子交接 | `unitree_sdk2: include/unitree/dds_wrapper/common/Publisher.h` |
-| DDS 接收（库内） | 把收到的 `LowCmd` 交给回调 | 库内部 | 同上 |
+| DDS 接收（库内） | 把收到的 `LowCmd` 交给回调（**2026-09-25 实测：回调在 SDK 自建线程 `rlsnr`，只有 `queueLen=0` 才跑在这里的 `recvUC`**，见 §10） | 库内部 | 同上 |
 
 **没有画进图、但要知道的两件事**：① 换模型（UI 拖拽/打开文件）会在物理线程里 `mj_deleteData/Model` 再新建（`main.cc:352-353`、`:382-383`），此时桥手里的裸指针就悬垂了；② 全局变量只有两个裸指针（`main.cc:99-100`），没有任何所有权封装。
 
@@ -165,7 +165,7 @@ flowchart LR
 | 线程 | 拥有 / 读写什么 | 同步手段 | 证据 |
 |---|---|---|---|
 | 主线程 | 建 viewer、启动两个手写线程 | 无 | `unitree_mujoco.py:79-83`（`__main__` 块） |
-| UI 守护线程 | GLFW 事件与绘制 | 库内部 | `mujoco/viewer.py:575`、`:586` |
+| UI 守护线程（实测名字 `_launch_internal`） | GLFW 事件与绘制 | 库内部 | `mujoco/viewer.py:575`、`:586` |
 | `SimulationThread` | 初始化 DDS 桥、`mj_step`、elastic band | `locker` | `unitree_mujoco.py:38`、`:52-61` |
 | `PhysicsViewerThread` | `viewer.sync()` 与节流睡眠 | 同一把 `locker` | `unitree_mujoco.py:70`、`:72-74` |
 | `RecurrentThread` ×3 | 读 `sensordata` 填消息并发布 | publisher 自身（无后台线程） | `unitree_sdk2py_bridge.py:63`、`:71`、`:81` |
@@ -325,13 +325,47 @@ sequenceDiagram
     Note over RT,PB: 关键点：实时侧只有 trylock（永不阻塞），搬运与序列化都在另一个线程 —— 这正是我们要在物理线程上做的事
 ```
 
-## 10. 待核实与复核方法
+## 10. 核实结果与复核方法
+
+**已核实（2026-09-25，本机运行期实测）**：带队列订阅（上游 C++ 用的 `InitChannel(handler, 10)`）的回调跑在 **SDK 自建的线程**上；`queueLen=0` 时才跑在 **Cyclone DDS 的接收线程**上。两种语言同构，名字不同：
+
+| | `queueLen = 0`（监听者直调） | `queueLen > 0`（上游采用） |
+|---|---|---|
+| C++ | Cyclone DDS 接收线程 `recvUC` | SDK 自建线程 `rlsnr` |
+| Python | Cyclone DDS 内部线程（`Listener(on_data_available=…)` 直接调 handler） | SDK 自建 `ch_reader` 守护线程（`core/channel.py`：`queueLen > 0` 时 `Thread(…, name="ch_reader", daemon=True)`） |
+
+证据是两条运行期打印，不是读源码推断（C++ SDK 的实现主体在预编译的 `libunitree_sdk2.a` 里，读不到；Python 侧可读源码，但也用同一手段交叉确认）：
+
+```text
+[probe] rt/lowcmd queueLen=0  -> 回调线程 tid=138692570097216 name='recvUC'
+[probe] rt/lowcmd queueLen=10 -> 回调线程 tid=138692561704512 name='rlsnr'
+[probe] LowCmdHandler 首次执行于线程 name='ch_reader' ident=128441680619072 daemon=True   # Python 侧
+```
+
+复核命令（探针是本项目自己写的、挂在 `Replicate.d/unitree_mujoco/cpp/probe_lowcmd.cpp`，不改上游源码：它同时挂 `queueLen=10` 与 `queueLen=0` 两个订阅者，第一次回调时打印 `pthread_getname_np`）：
+
+```bash
+# 先跑上游仿真器与 example/cpp/stand_go2，再跑探针（环境搭建见 ../pitfalls/environment.md）
+./probe_lowcmd 20
+```
+
+顺带把仿真器进程的线程清单也测了（Python 侧同一次运行里 `threading.enumerate()` 的实测结果，共 **8 个**线程）：
+
+```text
+[('MainThread', False), ('Thread-1 (_launch_internal)', True), ('Thread-3 (PhysicsViewerThread)', False),
+ ('Thread-4 (SimulationThread)', False), ('sim_lowstate', True), ('sim_highstate', True),
+ ('sim_wireless_controller', True), ('ch_reader', True)]
+```
+
+后 4 个都是 SDK/桥接层起的守护线程；`Thread-1 (_launch_internal)` 是被动 viewer 自己的 UI 线程（`mujoco.viewer.launch_passive` 内部起的），不在上游代码里。**“3 线程”只描述业务主干，加上这些才是进程的真实线程数**。
+
+### 10.1 仍未核实 / 复核方法
 
 | 待核实项 | 现状 | 怎么核 |
 |---|---|---|
-| **C++ 侧 `LowCmd` 回调跑在哪个线程**（DDS 接收线程？还是 SDK 的 reader 线程？） | 本机未安装 `unitree_sdk2`（`/opt/unitree_robotics` 不存在），GitHub 抓取 `include/unitree/dds_wrapper/common/Subscription.h` 失败，故**未逐行核实**；图中暂写作"库内部" | 装好 SDK 后读 `unitree_sdk2/include/unitree/dds_wrapper/common/Subscription.h` 与 `channel.hpp` 的实现，确认 `CreateRecvChannel` 是回调直调还是另有 reader 线程 |
+| **C++ 侧 `LowCmd` 回调跑在哪个线程**（DDS 接收线程？还是 SDK 的 reader 线程？） | **已核实（2026-09-25）**：带队列（上游的 `InitChannel(handler, 10)`）→ SDK 自建线程 `rlsnr`；`queueLen=0` → DDS 接收线程 `recvUC` | 已完成，证据与命令见本节上文 |
 | C++ publisher 的数量随机型变化（Go2 3 个，G1 5 个） | 已核实类层次，未数 G1 的完整清单 | 数 `bridge.h` 里 `G1Bridge` 构造的元素 |
-| Cyclone DDS 内部线程个数 | 随实现/配置而异，**不属于本仓库设计** | 需要时以 `cyclonedds` 文档为准，图中统一写"库内部" |
+| Cyclone DDS 内部线程的名字与个数 | 名字随实现/配置而异（本机实测接收线程叫 `recvUC`），**不属于本仓库设计** | 需要时以 `cyclonedds` 文档为准；图中除已实测处外仍统一写"库内部" |
 
 ## 11. 与笔记的分工
 

@@ -134,3 +134,41 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 - **这个参数要写在「工作区文件」或用户设置里，不能写在文件夹级 `.vscode/settings.json`**：clangd 扩展把 `clangd.arguments` 声明为 **window scope**，而多根工作区下 window 级设置只认工作区文件 / 用户设置，放文件夹里不生效（现象：clangd 进程参数是空的，仍然标红）。本项目放在同级的 `RoboCon.code-workspace`（该文件不入库）。
 - 改完要重启语言服务器（命令面板 → `clangd: Restart language server`），否则跑的还是旧进程；想确认可以直接看进程参数：`ps -eo args | grep clangd`。
 - clangd 把索引缓存写在 `<project>/.cache/clangd/`（它把含 `compile_commands.json` 的上级目录当作 project），已加进 `.gitignore`。
+
+## 2026-09-25 复现上游 unitree_mujoco（C++ 与 Python 两条路线）
+
+> 用途与任务背景见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md) 的「复现上游参考实现」一节；复现解决的那个疑问（`LowCmd` 回调归属）见 [`../learn/unitree-mujoco-threads.md`](../learn/unitree-mujoco-threads.md) §10。两个自建环境都不入库，放在工作区同级目录 `Replicate.d/`：`unitree_mujoco/{python,cpp}/` 各一个 pixi 环境，与环境、版本无关的 SDK 放顶层 `Replicate.d/unitree_sdk2/` 共用。
+
+- **两条路线各自单独建环境，不动任务主环境**。Python 侧必须 `python=3.10`：`unitree_sdk2_python/setup.py` 钉死 `cyclonedds==0.10.2`，而该版本只发布了 **cp310** 轮子，cp311/cp312 都是 0 个（`curl -s https://mirrors.ustc.edu.cn/pypi/simple/cyclonedds/ | grep -c 'cyclonedds-0.10.2.*cp312'` → `0`），在 3.12 上只能源码编 Cyclone DDS。C++ 侧不能复用主环境：官方包里的 `libmujoco.so` 会和 conda 的 `mujoco` 撞车。
+- **旧 `opencv-python` 与 numpy 2 不兼容**：pip 那份 `opencv-python 4.5.5` 是按 numpy 1.x ABI 编的，在 numpy 2.2.6 下 `import cv2` 报 `numpy.core.multiarray failed to import`；把 numpy 钉到 `1.26` 即可（也符合该 SDK 的年代）。
+- **C++ 路线必须另下官方 MuJoCo 发布包**：conda 的 `mujoco` 只有头文件，而 `simulate/CMakeLists.txt:25` 的 `file(GLOB …)` 要**编 `mujoco/simulate/{glfw_*,platform_*,simulate}.cc`** 这些示例源码，所以 `Replicate.d/mujoco-3.12.0/`（与 conda 同版本）免不了。
+- **`unitree_sdk2` 不用自己编 Cyclone DDS、也不用 sudo**：仓库自带预编译 `lib/x86_64/libunitree_sdk2.a` 与 `thirdparty/{include,lib}` 里的 ddsc/ddscxx，`cmake --install` 到 `Replicate.d/unitree_sdk2` 即可；上游硬编码的 `/opt/unitree_robotics/lib/cmake` 是用 `list(APPEND …)` 加的（`simulate/CMakeLists.txt:12`），命令行传 `-DCMAKE_PREFIX_PATH=<install>/lib/cmake` 就能盖过它。
+- **编上游 `simulate` 还差两个 conda 依赖**：glfw 的头文件 `#include <GL/gl.h>` → 需要 `libgl-devel`（conda 编译器不搜系统 `/usr/include`，即使系统装了 `libgl-dev` 也没用）；SDK 的 `include/unitree/dds_wrapper/robots/go2/go2_sub.h:7` 有 `#include <eigen3/Eigen/Dense>` → 需要 `eigen`。
+- **上游按可执行文件位置找配置与场景**：`simulate/src/main.cc:683` 是 `proj_dir = getExecutableDir().parent_path()`，即要求可执行文件正好在 `simulate/` 下一层，然后读 `proj_dir/config.yaml`、场景取 `proj_dir.parent_path()/unitree_robots/<robot>/<scene.xml>`（`:684`、`:687`）。把构建目录放到 `Replicate.d` 后，用软链接补齐这套相对位置即可，参考克隆里只加一个 `simulate/mujoco → Replicate.d/mujoco-3.12.0`。
+- **回环网卡上的 DDS 会打印 `selected interface "lo" is not multicast-capable: disabling multicast`**：`lo` 没有多播，属正常，单机通信仍走单播。
+- **Python 侧启动前要改两个运行时条件**（不改参考源码，用启动器覆盖）：`USE_JOYSTICK = 1` 在本机没有手柄（无 `/dev/input/js*`）时会失败；`ROBOT_SCENE` 是相对路径、依赖 cwd。两者都在 `Replicate.d/unitree_mujoco/python/run_sim.py` 里改，该脚本同时负责打印线程清单与回调线程。
+- **被动 viewer 需要真实窗口**：Python 侧得 `MUJOCO_GL=glfw`（主环境默认是 `egl`，无窗口）；本机 Wayland 会话下会有一条 `GLFWError: (65548) Wayland: The platform does not provide the window position` 警告，不影响显示。
+- **退出阶段会段错误**：Python 侧两次复现，`viewer.close()` 之后进程以 `segmentation fault (core dumped)` 收场——上游退出路径本身缺同步，不影响前面的运行。
+
+复现时要敲的关键命令（在 `Replicate.d/unitree_mujoco/{python,cpp}` 下执行，两个环境各自 `pixi install` 一次）：
+
+```bash
+# Python：仿真器（探针在启动器里，会打印线程清单与 LowCmd 回调所在线程）
+pixi run python run_sim.py                 # 加 --seconds 10 可自动关窗退出
+# 控制器另开终端（回车开始，无限循环）
+printf '\n' | pixi run python ../../../ReadOnly.d/unitree_mujoco/example/python/stand_go2.py
+
+# C++：编上游仿真器与控制器（SDK 安装前缀与官方 MuJoCo 包按上面两条准备）
+SDK=/home/bis/BiS.d/Code.d/RoboCon/Replicate.d/unitree_sdk2 ; MJ=/home/bis/BiS.d/Code.d/RoboCon/Replicate.d/mujoco-3.12.0
+cmake -S ../../../ReadOnly.d/unitree_mujoco/simulate -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$SDK/lib/cmake;$CONDA_PREFIX" \
+  -DCMAKE_EXE_LINKER_FLAGS="-L$CONDA_PREFIX/lib -L$MJ/lib -L$SDK/lib -Wl,-rpath,$CONDA_PREFIX/lib -Wl,-rpath,$MJ/lib -Wl,-rpath,$SDK/lib"
+cmake --build build --target unitree_mujoco -j8
+cmake -S ../../../ReadOnly.d/unitree_mujoco/example/cpp -B build-stand -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$SDK/lib/cmake;$CONDA_PREFIX"
+cmake --build build-stand -j8
+# 跑：仿真器（带官方 Simulate 界面）+ 控制器（另开终端，回车开始）
+LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$SDK/lib:$MJ/lib" ./build/unitree_mujoco
+LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$SDK/lib" ./build-stand/stand_go2
+```
+
+两边的运行结果（基座高度采样）见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md) 的「复现上游参考实现」一节。

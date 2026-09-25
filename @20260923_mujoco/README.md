@@ -246,6 +246,28 @@ pixi run @20260923_mujoco/cpp/build/dog_sim @20260923_mujoco/scenes/flat_scene_r
 
 **为什么做 C++**：不是为了更快——`mj_step` 两边调用的是同一份 C 库，单步耗时几乎一样（实测数据见 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的「C++ 工具链」一节），渲染开销也只由 GPU 决定；意义在**工程结构与 sim-to-real**（真实机器人上的控制程序是 C++）。工具链选择（为什么用 pixi 的编译器、编辑器提示怎么配）同样记在 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md)。
 
+## 复现上游参考实现（任务 3 的前置验证）
+
+为了把「`LowCmd` 回调到底跑在哪个线程」从“读代码推断”变成运行期事实，也为了先把参考实现的**预期效果**摸清、给后面的 Python 重构留一个对照基准，2026-09-25 在本机把上游 `unitree_mujoco` 的 `simulate_python/`、`simulate/`（C++）连同 `example/{python,cpp}/stand_go2.*` 都跑通了一遍。
+
+两个复现环境**不在本仓库内**，放在工作区同级的 `Replicate.d/`（相对本目录是 `../../Replicate.d/`）：参考克隆仍是 `ReadOnly.d/unitree_mujoco`，只往里加了一个指向官方 MuJoCo 包的软链接，源代码未改。为什么必须另建环境（Python 必须是 3.10、`cyclonedds==0.10.2` 只有 cp310 轮子、C++ 侧为何必须另下官方 MuJoCo 包、需要 `libgl-devel` 与 `eigen`、上游按可执行文件位置找配置与场景、退出时段错误）全部记在 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的「复现上游 unitree_mujoco」一节，连完整命令一起。
+
+两个终端各跑一边（仿真器与控制器通过域 1 的 DDS 在 `lo` 上通信，控制器都要按一次回车才开始）：
+
+```text
+Python：Replicate.d/unitree_mujoco/python 下 pixi run python run_sim.py，另开终端跑 example/python/stand_go2.py
+C++   ：Replicate.d/unitree_mujoco/cpp 下跑 ./build/unitree_mujoco（带官方 Simulate 界面），另开终端跑 ./build-stand/stand_go2
+```
+
+实测的预期效果（`stand_go2` 的脚本是先站起、3 秒后再趴下；基座高度取自仿真器发布的 `rt/sportmodestate`）：
+
+| 实现 | 起始（无控制稳态） | 站起峰值 | 最终（趴下稳态） |
+|---|---|---|---|
+| Python（1 s 采样 `qpos[:3]`） | 0.0771（自由落体后瘫地） | 0.3432 | 0.1352 |
+| C++（1 s 采样 `rt/sportmodestate`） | 0.1797（上一次运行留下的蹲姿） | 0.3897 | 0.1776 |
+
+两个数不一致本身就是发现：两边时间步不同（Python `SIMULATE_DT = 0.005`、C++ `0.002`），伺服收敛位形因此不同；做 A/B 对比时不能直接把两边的绝对高度拿来比。回调归属、线程清单与复核命令见 [`../docs/learn/unitree-mujoco-threads.md`](../docs/learn/unitree-mujoco-threads.md) §10。
+
 ## 进度
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）

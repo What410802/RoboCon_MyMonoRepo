@@ -291,8 +291,9 @@ sequenceDiagram
 | 4 | 换模型时 `mj_deleteData/Model` 而其他人仍持裸指针 | `main.cc:352-353` / `:382-383`（`mj_deleteData(d); mj_deleteModel(m);`） | 悬垂指针；桥线程下一次 tick 就可能访问已释放内存 | `Simulator` 类持有所有权；换模型时先停线程 → 交换 → 再启动，或整体重建实例 |
 | 5 | 退出靠 `exit(0)` 强制结束 | `main.cc:570`（`PhysicsThread` 末尾） | 析构不走、无法库化/测试、日志与录像可能截断 | 原子停止标志 + `join()`；录像 `close()` 显式收尾（现有 `VideoRecorder` 已是这个模式） |
 | 6 | 全局裸 `mjModel*/mjData*`，没有对象边界 | `main.cc:99-100` | 谁都能改，依赖关系靠人记 | 一切状态收进 `Simulator`，对外只暴露 `step()`、`snapshot()`、`set_control()` |
-| 7 | 用 `#define private public` 掏 `GlfwAdapter::window_` 拿窗口句柄挂键盘回调 | `main.cc:15-18` | 依赖实现细节，版本一升就可能编译失败/行为异常 | **不抄**。键盘改用官方接口或不做；要交互就等服务端提供的回调（`simulate.h` 的 `user_key_cb` 机制另行确认） |
+| 7 | 用 `#define private public` 掏 `GlfwAdapter::window_` 拿窗口句柄，再 `glfwSetKeyCallback` **覆盖**掉 adapter 自己注册的按键回调 | `main.cc:15-18`（掏私有成员）、`main.cc:700`（覆盖回调）、`glfw_adapter.cc:77`（被覆盖的那个） | 依赖实现细节，版本一升就可能编译失败；而且 **GLFW 的 `glfwSetKeyCallback` 是单槽 setter**，覆盖后窗口按键事件不再进 `mjuiState`，官方 Simulate 的内置快捷键（Space 播放/暂停、`[`/`]` 换相机、F1~F5、方向键单步……清单见官方 `simulate.cc:133-179`）**应当全部失效**；鼠标交互与 Alt/Ctrl/Shift 相机修饰键不受影响（后者是 `glfwGetKey` 轮询，`glfw_adapter.cc:220-231`） | **不抄**。官方 3.12 的 `simulate.h` 里**没有**用户按键回调（grep `user_key_callback` / `key_callback` 均为空），这就是上游硬改 GLFW 的原因；我们自写渲染循环处理键盘 |
 | 8 | 实时性用单步 `sleep(timestep - elapsed)`，无追赶 | `unitree_mujoco.py:63-67` | 睡眠抖动（几十~上百 µs）直接进时间轴，落后了不会补 | deadline pacing（`target = start + n*timestep`）+ 可选 `realtime / fast` 两种模式；落后超阈值时重同步（借 `syncMisalign` 的思路） |
+| 9 | **控制器完全没有 stdin 控制**：`stand_go2` 只 `std::cin.get()` 等一次回车，之后跑固定脚本（站起 3 s → 趴下），无任何后续输入解析 | 全仓仅两处 stdin，都是等一次回车：`example/cpp/stand_go2.cpp:172`、`example/ros2/src/stand_go2.cpp:95` | 想在终端里“手动驾驶”没有现成入口。唯一的交互式输入是手柄（`use_joystick: 1` + `/dev/input/js*`；`physics_joystick.h:9`、`:51` 包成 `XBoxJoystick`/`SwitchJoystick`，由 `unitree_sdk2_bridge.h:243` 广播到 `rt/wirelesscontroller`），而默认配置 `use_joystick: 0` 是关的 | 自己加：stdin/键盘 → 控制缓冲区（或直接组一条模拟手柄消息），作为“三运行模式”里的一种；真正的控制接口本来就是 DDS 的 `rt/lowcmd` |
 
 ## 8. 我们的目标设计
 
