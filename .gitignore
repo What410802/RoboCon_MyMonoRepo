@@ -5,3 +5,6 @@
 # binaries
 build/
 build_test/
+
+# clangd 索引缓存（写在含 compile_commands.json 的那个目录下）
+.cache/

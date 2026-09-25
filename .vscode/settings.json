@@ -1,3 +1,7 @@
 {
-	"cmake.autoDetectSourceDirectory": false
+    // C++ 智能提示（clangd）的 `--query-driver` 参数写在同一级的
+    // `RoboCon.code-workspace` 里（那个文件不入库）：clangd 的参数是 window scope，
+    // 多根工作区下只看工作区文件或用户设置，写在这个文件夹级文件里不会生效。
+    // 原因与排查方法见 README.md「环境与踩坑记录 → C++ 工具链」。
+    "cmake.autoDetectSourceDirectory": false
 }

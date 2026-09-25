@@ -1,5 +1,7 @@
 # RoboCon 培训学习仓库
 
+项目约定（提交信息、文档、目录、Git 用法、环境）见 [`docs/conventions.md`](docs/conventions.md)。
+
 ## 任务记录
 
 + 2026-09-22 `robot_cpp_training` [目录](@20260922_robot_cpp_training/robot_cpp_oop_cmake_training/)：[文档](@20260922_robot_cpp_training/验收.md)
@@ -7,6 +9,18 @@
 
 
 ## 环境与踩坑记录
+
+### 工具链选择：为什么用 pixi
+
+结论：**Python、MuJoCo（C 库 + Python 绑定）与 C++ 工具链都装在同一个 pixi 环境里**，不用系统 apt 包，也不用单独的 venv。
+
+- **跨语言共用同一份 MuJoCo**：任务 4 要写 C++，而 C++ 需要的是 `libmujoco`（头文件 + 库 + CMake 配置）；conda-forge 的 `mujoco` 包同时提供 C 库与 Python 绑定，两边**就是同一个 3.12.0**，行为一致、数字可比（C++/Python 对照正是任务 4 的验收方式）。pip/venv 只能拿到 Python 轮子，拿不到配套头文件与 CMake 配置。
+- **一次装齐 C++ 工具链**：`cxx-compiler` / `cmake` / `ninja` 都在 conda-forge，与 `libmujoco` 出自同一条工具链，避免“系统 gcc 编、conda 库链接”的 ABI / libstdc++ 错配。
+- **可复现**：`pixi.lock` 锁死确切版本与哈希，别人 clone 后 `pixi install` 得到同一个环境，“在我机器上能跑”这件事有据可查。
+- **不污染系统**：一切装在仓库内的 `.pixi/`（已 gitignore），不需要 sudo，删掉目录即回滚；系统只负责显卡驱动这类必须由系统管的东西。
+- **能承载“必须提前生效”的环境变量**：`MUJOCO_GL` 必须在 `import mujoco` 之前生效（见下面“图形后端”一节），`[activation.env]` 正好解决这件事。
+- **两种包源都可用**：conda 侧走 conda-forge（实测直连 conda.anaconda.org 最快，见下一小节），PyPI 侧由内置的 uv 负责，并可用 `extra-index-urls` 配国内回退源。
+- 代价：多一层工具（要习惯用 `pixi run` 而不是直接 `python`），且 conda-forge 的 `mujoco` 版本略落后于 PyPI（当前 3.12.0 vs 3.14.0）——对本项目不构成问题。
 
 ### 2026-09-24 pixi / conda / PyPI 镜像
 
@@ -114,6 +128,19 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 - 本机显卡算力（Pascal sm_61 + 驱动 580）**不够跑 MJX / MJWarp**，所以只用 CPU 仿真。
 - 本机特有的小现象：开窗口的进程退出时偶发 `segmentation fault` 或 `GLFWError: EGL: Failed to clear current context`（MP4 在崩溃前已写完，产物不受影响）； Wayland/XWayland 会把 GLFW 的窗口位置警告打到 stderr。
 - 这些结论**驱动了哪些配置**（反向索引）：见 [`docs/mujoco-notes.md` 第 7.6 节](docs/mujoco-notes.md)。
+
+### 2026-09-25 C++ 工具链（pixi 提供）与编辑器提示
+
+> 用途与任务背景见 [`@20260923_mujoco/README.md`](@20260923_mujoco/README.md) 的「C++ 程序」一节。
+
+- **用 pixi 的编译器，不用系统 gcc**：conda-forge 的 `libmujoco` 是 conda 工具链编出来的，混搭系统 gcc 容易踩 ABI / libstdc++ 版本问题，所以 `cxx-compiler` / `cmake` / `ninja` 都装进同一个 env（本机实测 gcc 15.3.0 / cmake 4.4.3 / ninja 1.13.2）。
+- conda 的 `mujoco` 包**已经带齐 C++ 需要的东西**：`include/mujoco/*.h`、`libmujoco.so`、`lib/cmake/mujoco/mujocoConfig.cmake`（目标 `mujoco::mujoco` 与 `mujoco::libmujoco_simulate`），所以既不用自带 MuJoCo 源码，也不用宇树 readme 里那套“下载官方包解压到 `~/.mujoco` 再 `ln -s`”。
+- 配置时把 `-DCMAKE_PREFIX_PATH="$CONDA_PREFIX"` 传进去即可，`find_package(mujoco)` 就能找到上面的 CMake 配置。
+- **换 C++ 不会更快**：`mj_step` 两边调的是同一份 C 库，本机实测 C++ 循环 0.0394 ms/步、Python 0.04 ms/步；渲染依旧是 5.5 ms/帧（由 GPU 决定）。
+- **编辑器（clangd）要配 `--query-driver`**：CMake 把 `$CONDA_PREFIX/include` 当作“隐式包含目录”而**不写进** `compile_commands.json`，clangd 于是找不到 `mujoco/mujoco.h`、也拿不到 conda 的 libstdc++ 头，满屏标红（一次自检可报出 21 条错误）。让 clangd 去问 pixi 的编译器即可消除：`--query-driver=**/.pixi/envs/*/bin/*`（glob 必须 `**/` 开头，实测不带就匹配不上）。排查工具：`clangd --check=<file>`，它打印的就是编辑器同源的诊断。
+- **这个参数要写在「工作区文件」或用户设置里，不能写在文件夹级 `.vscode/settings.json`**：clangd 扩展把 `clangd.arguments` 声明为 **window scope**，而多根工作区下 window 级设置只认工作区文件 / 用户设置，放文件夹里不生效（现象：clangd 进程参数是空的，仍然标红）。本项目放在同级的 `RoboCon.code-workspace`（该文件不入库）。
+- 改完要重启语言服务器（命令面板 → `clangd: Restart language server`），否则跑的还是旧进程；想确认可以直接看进程参数：`ps -eo args | grep clangd`。
+- clangd 把索引缓存写在 `<project>/.cache/clangd/`（它把含 `compile_commands.json` 的上级目录当作 project），已加进 `.gitignore`。
 
 ## 其他知识点记录 <!-- *（[我的问答链接](https://yuanbao.tencent.com/chat/naQivTmsDa/0Qgx9qPyAvQ?projectId=3daea2310a624f939a9e427e121d9c47)）* -->
 

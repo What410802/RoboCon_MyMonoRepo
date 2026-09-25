@@ -30,3 +30,8 @@ MUJOCO_GL = "egl"
 [dependencies]
 python = "3.12.*"
 mujoco = ">=3.12.0,<4"
+# C++ 仿真程序（@20260923_mujoco/cpp）的工具链，与 Python 侧共用同一个 pixi 环境：
+# 用环境自带的编译器，避免系统 gcc 与 conda 版 libmujoco 混搭出 ABI 问题。
+cxx-compiler = "*"
+cmake = "*"
+ninja = "*"

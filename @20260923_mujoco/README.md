@@ -44,7 +44,9 @@ pixi run python @20260923_mujoco/scripts/<目录>/<脚本>.py ...
 │   │       └── output/                   # 上面两个示例的产物（默认写这里）
 │   ├── onetime_tools/            # 一次性工具：measure_and_fix_base_height.py（量脚底高度、抬基座）
 │   └── agent_scripts/            # 诊断小工具（facts / A-B / rest_check / compare / urdf_to_mjcf）
-└── src/                          # 计划中的仿真程序目录（尚未创建）
+└── cpp/                          # C++ 仿真程序（任务 4）
+    ├── CMakeLists.txt            # find_package(mujoco)，工具链取自 pixi 环境
+    └── src/main.cpp              # 目前：加载场景 + 读 keyframe + 零力矩跑 N 秒的检查
 ```
 
 ## 环境与版本
@@ -227,9 +229,28 @@ with VideoRecorder(model, "out.mp4", fps=50, camera="iso") as rec:   # ← ② �
 * 完整的“接入”示例：`example_attach.py`（照抄 `simulate.py` 的循环形状，只多一行）。
 * 想顺便在屏幕上开窗口看，才需要 `example_with_viewer.py`：`viewer.sync()` 每次都要等一个 显示刷新周期，所以必须**降频**（每 10~25 步一次），否则仿真速度会被显示刷新钉住。 实测数据（本机）见 [`../docs/mujoco-notes.md` 第 7 节](../docs/mujoco-notes.md)。
 
+## C++ 程序（任务 4）
+
+`cpp/` 是任务 4 的 C++ 实现：与 Python 侧**共用同一个 pixi 环境**和**同一份 MJCF**（`models/` + `scenes/`），所以两边算出的数字可以直接对照。
+
+当前进度：工具链打通 + 模型加载 + 静止判定复现（`cpp/src/main.cpp`）。程序会读 `rest` keyframe、在零力矩下跑 N 秒，打印基座漂移、末态速度与接触点数；结论与 Python 侧 `rest_check.py` 一致。
+
+```bash
+pixi run cmake -S @20260923_mujoco/cpp -B @20260923_mujoco/cpp/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
+pixi run cmake --build @20260923_mujoco/cpp/build
+pixi run @20260923_mujoco/cpp/build/dog_sim                                          # 默认 scenes/flat_scene.xml，跑 8 s
+pixi run @20260923_mujoco/cpp/build/dog_sim @20260923_mujoco/scenes/flat_scene_raw.xml 2   # 反例：穿模被弹飞，判为“未静止”
+```
+
+`cpp/build/` 是构建产物、已被 `.gitignore` 忽略；`compile_commands.json` 也在其中，供编辑器提示使用。
+
+**为什么做 C++**：不是为了更快——`mj_step` 两边调用的是同一份 C 库，单步耗时几乎一样（实测数据见 [`../README.md`](../README.md) 的 C++ 小节），渲染开销也只由 GPU 决定；意义在**工程结构与 sim-to-real**（真实机器人上的控制程序是 C++）。工具链选择（为什么用 pixi 的编译器、编辑器提示怎么配）同样记在 [`../README.md`](../README.md) 的「环境与踩坑记录」。
+
 ## 进度
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）
 - [x] 任务 2：URDF→MJCF、平地场景、零力矩静止趴卧、力矩执行器
-- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计
-- [ ] 任务 4（选做）：用 C++ 重做
+- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中）
+- [ ] 任务 4（选做）：用 C++ 重做（进行中：工具链、模型加载、静止判定已复现）
+
+任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/unitree-mujoco-notes.md` → ③ Python 侧按新结构重构（`scripts/` 里与仿真/可视化直接相关的代码迁到 `python/`，`agent_scripts/`、`onetime_tools/` 留在 `scripts/`）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。
