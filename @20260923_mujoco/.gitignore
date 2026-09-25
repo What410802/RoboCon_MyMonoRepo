@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# MuJoCo 运行产物
+*.mjb
+*.mjz
+*.log
+
+# 旧版网站导出（默认 Position + 无 freejoint），只留作对照，不入库
+assets/black_description.bak/
+
+# 说明：assets/black_description/meshes 与 models/meshes 都是**目录软链接**，
+# 指向唯一一份真实 mesh（assets/urdf/meshes，34 MB）。软链接本身要入库（只有几十字节），
+# 因此这里不做排除；重复的真实目录已经删掉，不会再出现存两份 34 MB 的情况。
+
+# 编辑器 / 系统
+.DS_Store
+.vscode/

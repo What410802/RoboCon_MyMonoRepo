@@ -1,0 +1,33 @@
+<mujoco model="black_flat_scene">
+  <!-- 平坦地面场景：只负责环境（地面/灯光/视觉），机器人本体在 models/ 里。
+       复用方式与 MuJoCo 官方示例一致：<include> 会在解析阶段把被包含文件的元素合并进来。 -->
+  <include file="../models/black_description.xml"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <global azimuth="120" elevation="-20" offwidth="1280" offheight="720"/>
+  </visual>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <!-- 平坦地形：type=plane 是无限大平面，size 只影响显示；放在 z=0 -->
+    <geom name="floor" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"
+          condim="3" friction="1 0.005 0.0001"/>
+  </worldbody>
+
+  <!-- 初始状态：零力矩趴在平地上。
+       qpos = 7(基座 pos + quat) + 12(关节角，顺序 FL/FR/RR/RL × hip/thigh/calf)。
+       这组数值由 scripts/rest_check.py --mode drop 实测定出：让模型从"脚刚好触地"的
+       站立姿态自由落下，收敛成四肢收拢的趴卧姿态后取其 qpos；
+       xy 清零（平面上平移等价），所以放上去即静止，不需要"先掉一下"。
+       复验：pixi run python scripts/rest_check.py -->
+  <keyframe>
+    <key name="rest" qpos="0 0 0.1449 1 0 0 0.0015
+                            0.5014  1.6008 -2.5542
+                           -0.5014 -1.6008  2.5542
+                            0.5014 -1.6008  2.5542
+                           -0.5014  1.6008 -2.5542"/>
+  </keyframe>
+</mujoco>

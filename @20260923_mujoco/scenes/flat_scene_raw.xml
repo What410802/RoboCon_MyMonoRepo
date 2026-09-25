@@ -1,0 +1,17 @@
+<mujoco model="black_flat_scene_raw">
+  <!-- 对照用场景：**直接 include 网站原始导出**（未打任何补丁，trunk 仍在 pos="0 0 0"），
+       地面同样在 z=0。用来复现「默认位形穿模 → 求解器把狗弹飞」这个现象：
+           pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py \
+               --scene @20260923_mujoco/scenes/flat_scene_raw.xml --seconds 2 --camera side
+       正常仿真请用 scenes/flat_scene.xml（指向 models/ 里打过补丁的模型）。
+       注意本场景里没有 keyframe —— 原始导出本来就没有。 -->
+  <include file="../assets/black_description/black_description.xml"/>
+
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="5 5 0.1" rgba="0.8 0.8 0.8 1"
+          condim="3" friction="1 0.005 0.0001"/>
+  </worldbody>
+</mujoco>

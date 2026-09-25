@@ -2,6 +2,6 @@
 .pixi/*
 !.pixi/config.toml
 
-# Binaries
+# binaries
 build/
 build_test/
