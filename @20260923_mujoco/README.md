@@ -9,6 +9,14 @@ cd ..                       # 到仓库根目录（有 pixi.toml 的地方）
 pixi run python @20260923_mujoco/scripts/<目录>/<脚本>.py ...
 ```
 
+任务 3 的仿真循环在 `python/`，开窗口要临时把图形后端换回 `glfw`（仓库默认是 `egl`，无窗口）：
+
+```bash
+pixi run env MUJOCO_GL=glfw python @20260923_mujoco/python/main.py          # 开窗口，零力矩跑
+pixi run python @20260923_mujoco/python/main.py --no-viewer --seconds 8     # 无窗口跑 8 仿真秒
+pixi run python @20260923_mujoco/scripts/agent_scripts/physics_pacing.py    # 检查：渲染不顶住物理
+```
+
 ## 目录结构
 
 ```text
@@ -31,6 +39,10 @@ pixi run python @20260923_mujoco/scripts/<目录>/<脚本>.py ...
 │   └── simulate_record.mp4       # simulate_record.py 的录像（任务 2 证据）
 ├── examples/                     # 跟着教程敲的小例子（与任务 2 无关）
 │   └── 01_falling_box/           # 入门例：立方体落地（scene.xml + simulate.py）
+├── python/                       # 任务 3：借鉴 unitree_mujoco 重塑的仿真循环（双缓冲 + 两线程）
+│   ├── main.py                   # 入口：开窗口/无窗口、实时/全速
+│   ├── simulator.py              # 物理线程独占 mjData；渲染只读快照副本；锁只罩 memcpy
+│   └── control.py                # 控制输入：目前零力矩，键盘控制以后加在这里
 ├── scripts/
 │   ├── simulate.py               # 自己的仿真程序（最小 viewer 循环）
 │   ├── simulate_record.py        # 同上，接上录像（无窗口）
@@ -43,7 +55,7 @@ pixi run python @20260923_mujoco/scripts/<目录>/<脚本>.py ...
 │   │       ├── example_with_viewer.py    # 可选：一边开窗口看一边录
 │   │       └── output/                   # 上面两个示例的产物（默认写这里）
 │   ├── onetime_tools/            # 一次性工具：measure_and_fix_base_height.py（量脚底高度、抬基座）
-│   └── agent_scripts/            # 诊断小工具（facts / A-B / rest_check / compare / urdf_to_mjcf）
+│   └── agent_scripts/            # 诊断小工具（facts / A-B / rest_check / compare / urdf_to_mjcf / physics_pacing）
 └── cpp/                          # C++ 仿真程序（任务 4）
     ├── CMakeLists.txt            # find_package(mujoco)，工具链取自 pixi 环境
     └── src/main.cpp              # 目前：加载场景 + 读 keyframe + 零力矩跑 N 秒的检查
@@ -272,7 +284,7 @@ C++   ：Replicate.d/unitree_mujoco/cpp 下跑 ./build/unitree_mujoco（带官�
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）
 - [x] 任务 2：URDF→MJCF、平地场景、零力矩静止趴卧、力矩执行器
-- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中：研读笔记已写完 → [`../docs/learn/unitree-mujoco.md`](../docs/learn/unitree-mujoco.md)，线程/通信细节展开在 [`../docs/learn/unitree-mujoco-threads.md`](../docs/learn/unitree-mujoco-threads.md)）
+- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（研读笔记 → [`../docs/learn/unitree-mujoco.md`](../docs/learn/unitree-mujoco.md)，线程/通信细节 → [`../docs/learn/unitree-mujoco-threads.md`](../docs/learn/unitree-mujoco-threads.md)；**Python 侧已落地**：[`python/`](python/) 用双缓冲把渲染与物理拆开。实测（`scripts/agent_scripts/physics_pacing.py`）：同等 20 ms/次渲染下，无窗口我们 499 步/秒（实时 0.998x）、上游式单锁写法 271 步/秒（0.542x），且物理结果与单线程裸循环逐位相同；开窗口时降到 0.863x——那是 Python 的 GIL 争用（渲染那一步在 Python 里），不是锁，留给任务 4 用 C++ 解决）
 - [ ] 任务 4（选做）：用 C++ 重做（进行中：工具链、模型加载、静止判定已复现）
 
-任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/learn/unitree-mujoco.md` → ③ Python 侧按新结构重构（`scripts/` 里与仿真/可视化直接相关的代码迁到 `python/`，`agent_scripts/`、`onetime_tools/` 留在 `scripts/`）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。
+任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/learn/unitree-mujoco.md`（已完成）→ ③ Python 侧按新结构重构（**已完成**：`python/`，`scripts/` 里的旧脚本暂留作对照）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。
