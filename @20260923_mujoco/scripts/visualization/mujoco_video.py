@@ -29,7 +29,7 @@ MuJoCo 本身没有录像功能：官方 `simulate` 只能存单帧截图，`muj
   就选定了后端，之后再改 `os.environ` 无效。本模块会在 `import mujoco` 前 `setdefault("MUJOCO_GL", "egl")`，
   但这只有在**本模块比 mujoco 先被导入**时才起作用。为了不依赖 import 顺序，仓库根的
   `pixi.toml` 已经把 `MUJOCO_GL = "egl"` 放在 `[activation.env]` 里（每个 pixi 环境都带上）。
-  各后端的差异与实测数据见仓库根 `docs/mujoco-notes.md` 第 7 节（决策索引在 §7.6）。
+  各后端的差异与实测数据见仓库根 `docs/learn/mujoco.md` 第 7 节（决策索引在 §7.6）。
 * 依赖系统 `ffmpeg`（本机 /usr/bin/ffmpeg，带 libx264）。没有就在构造时直接报错。
 
 命令行用法与接入示例都见 `examples/example_attach.py`。

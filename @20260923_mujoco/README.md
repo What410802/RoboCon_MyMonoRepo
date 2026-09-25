@@ -1,6 +1,6 @@
 # MuJoCo 学习与 black 四足机器人仿真
 
-本目录是第二次培训（MuJoCo 与机器人仿真基础）的任务工作区。 环境（Python / MuJoCo）由**仓库根目录**的 `pixi.toml` 统一管理，本目录只放模型、场景与代码。
+本目录是第二次培训（MuJoCo 与机器人仿真基础）的任务工作区。 环境（Python / MuJoCo）由**仓库根目录**的 `pixi.toml` 统一管理，本目录只放模型、场景与代码。 仓库入口（任务记录、文档索引）：[`../README.md`](../README.md)。
 
 ## 运行方式
 
@@ -60,7 +60,7 @@ pixi run python @20260923_mujoco/scripts/<目录>/<脚本>.py ...
 | numpy | 2.5.3 | conda-forge |
 
 - conda-forge 的 `mujoco` **落后**于 PyPI（PyPI 已 3.14.0，conda-forge 最高 3.12.0）。 为了 C++ 与 Python 用同一份库，本项目选 conda-forge。
-- 本项目走 **CPU 仿真**：MuJoCo 本体就是 CPU 引擎（没有 GPU 版本），GPU 只影响 **渲染 / MJX / MJWarp** 三条支线，本项目用的是“渲染”这条（见下面“录像工具”）。 为什么本机用不了 MJX / MJWarp（显卡算力不够），见 [`../README.md` 的“环境与踩坑记录”](../README.md#环境与踩坑记录)。
+- 本项目走 **CPU 仿真**：MuJoCo 本体就是 CPU 引擎（没有 GPU 版本），GPU 只影响 **渲染 / MJX / MJWarp** 三条支线，本项目用的是“渲染”这条（见下面“录像工具”）。 为什么本机用不了 MJX / MJWarp（显卡算力不够），见 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的「图形后端 / GPU / 渲染性能」一节。
 
 ## URDF 来源
 
@@ -124,7 +124,7 @@ pixi run python @20260923_mujoco/scripts/agent_scripts/urdf_to_mjcf.py \
 | `scripts/visualization/examples/example_attach.py` | **接入示例**，同时是**零力矩录像的命令行入口**（原 `record_scene.py` 的职责已并入此处）：照抄 `simulate.py` 的循环形状，只多 `rec.capture(data)` 一行（不开窗口）；`--scene/--start/--camera/--follow/--fps/--width/--height` 可调 |
 | `scripts/visualization/examples/example_with_viewer.py` | 可选：一边开 `launch_passive` 看一边录（含 `viewer.sync()` 开销与实时节流的实测结论） |
 | `scripts/onetime_tools/measure_and_fix_base_height.py` | 把网站导出整理成 `models/black_description.xml`（1 条手工补丁 + 断言 + 软链接自愈，可复现） |
-| `scripts/agent_scripts/mujoco_facts.py` | 打印 geom type / friction / condim 的实测结论，供 `../docs/mujoco-notes.md` 引用 |
+| `scripts/agent_scripts/mujoco_facts.py` | 打印 geom type / friction / condim 的实测结论，供 `../docs/learn/mujoco.md` 引用 |
 | `scripts/agent_scripts/ab_initial_state.py` | A/B 对照：原始导出 vs 补丁后模型的初始状态（穿模 / 弹飞量化） |
 | `scripts/agent_scripts/rest_check.py` | 任务 2 验证：`--mode drop` 求趴卧姿态，`--mode keyframe` 验证零力矩静止 |
 | `scripts/agent_scripts/compare_mjcf.py` | 打印多个模型的结构指标，用于对比转换结果 |
@@ -223,11 +223,11 @@ with VideoRecorder(model, "out.mp4", fps=50, camera="iso") as rec:   # ← ② �
 
 现成可照抄的模板：`scripts/simulate_record.py`（就是 `simulate.py` 接上录像的版本，无窗口）。
 
-* **不需要窗口**：离屏渲染走 EGL（仓库根 `pixi.toml` 的 `[activation.env]` 已设 `MUJOCO_GL=egl`）。 这个变量必须**在 `import mujoco` 之前**生效，脚本里再 `setdefault` 可能已经太晚； 不设时的默认值（`glfw`）依赖显示服务，而且在双显卡机器上还可能落到另一块 GPU 上 —— 实测见 [`../docs/mujoco-notes.md` 第 7 节](../docs/mujoco-notes.md)。
+* **不需要窗口**：离屏渲染走 EGL（仓库根 `pixi.toml` 的 `[activation.env]` 已设 `MUJOCO_GL=egl`）。 这个变量必须**在 `import mujoco` 之前**生效，脚本里再 `setdefault` 可能已经太晚； 不设时的默认值（`glfw`）依赖显示服务，而且在双显卡机器上还可能落到另一块 GPU 上 —— 实测见 [`../docs/learn/mujoco.md` 第 7 节](../docs/learn/mujoco.md)。 图形栈背景（EGL / GLFW / Skia 各在哪一层）见 [`../docs/learn/graphics-stack.md`](../docs/learn/graphics-stack.md)。
 * 帧率、相机、编码、文件收尾全在库里；`capture()` 按**仿真时间** `data.time` 决定该不该出帧， 所以输出 MP4 的时间轴 = 仿真时间，改 `fps=` 不用动循环，**与渲染耗时/机器快慢无关** （慢机器只是录得久，产物一模一样）。
-* **分辨率是独立可调的**：`--width/--height`，或库里 `VideoRecorder(width=…, height=…)`。 视角由相机决定、与像素数无关，所以“同样的画面、更多像素”是原生支持的； 各档分辨率的单帧耗时实测见 [`../docs/mujoco-notes.md` 第 7.3 节](../docs/mujoco-notes.md)。
+* **分辨率是独立可调的**：`--width/--height`，或库里 `VideoRecorder(width=…, height=…)`。 视角由相机决定、与像素数无关，所以“同样的画面、更多像素”是原生支持的； 各档分辨率的单帧耗时实测见 [`../docs/learn/mujoco.md` 第 7.3 节](../docs/learn/mujoco.md)。
 * 完整的“接入”示例：`example_attach.py`（照抄 `simulate.py` 的循环形状，只多一行）。
-* 想顺便在屏幕上开窗口看，才需要 `example_with_viewer.py`：`viewer.sync()` 每次都要等一个 显示刷新周期，所以必须**降频**（每 10~25 步一次），否则仿真速度会被显示刷新钉住。 实测数据（本机）见 [`../docs/mujoco-notes.md` 第 7 节](../docs/mujoco-notes.md)。
+* 想顺便在屏幕上开窗口看，才需要 `example_with_viewer.py`：`viewer.sync()` 每次都要等一个 显示刷新周期，所以必须**降频**（每 10~25 步一次），否则仿真速度会被显示刷新钉住。 实测数据（本机）见 [`../docs/learn/mujoco.md` 第 7 节](../docs/learn/mujoco.md)。
 
 ## C++ 程序（任务 4）
 
@@ -244,13 +244,13 @@ pixi run @20260923_mujoco/cpp/build/dog_sim @20260923_mujoco/scenes/flat_scene_r
 
 `cpp/build/` 是构建产物、已被 `.gitignore` 忽略；`compile_commands.json` 也在其中，供编辑器提示使用。
 
-**为什么做 C++**：不是为了更快——`mj_step` 两边调用的是同一份 C 库，单步耗时几乎一样（实测数据见 [`../README.md`](../README.md) 的 C++ 小节），渲染开销也只由 GPU 决定；意义在**工程结构与 sim-to-real**（真实机器人上的控制程序是 C++）。工具链选择（为什么用 pixi 的编译器、编辑器提示怎么配）同样记在 [`../README.md`](../README.md) 的「环境与踩坑记录」。
+**为什么做 C++**：不是为了更快——`mj_step` 两边调用的是同一份 C 库，单步耗时几乎一样（实测数据见 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的「C++ 工具链」一节），渲染开销也只由 GPU 决定；意义在**工程结构与 sim-to-real**（真实机器人上的控制程序是 C++）。工具链选择（为什么用 pixi 的编译器、编辑器提示怎么配）同样记在 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md)。
 
 ## 进度
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）
 - [x] 任务 2：URDF→MJCF、平地场景、零力矩静止趴卧、力矩执行器
-- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中：研读笔记已写完 → [`../docs/unitree-mujoco-notes.md`](../docs/unitree-mujoco-notes.md)，线程/通信细节展开在 [`../docs/unitree-mujoco-threads.md`](../docs/unitree-mujoco-threads.md)）
+- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（进行中：研读笔记已写完 → [`../docs/learn/unitree-mujoco.md`](../docs/learn/unitree-mujoco.md)，线程/通信细节展开在 [`../docs/learn/unitree-mujoco-threads.md`](../docs/learn/unitree-mujoco-threads.md)）
 - [ ] 任务 4（选做）：用 C++ 重做（进行中：工具链、模型加载、静止判定已复现）
 
-任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/unitree-mujoco-notes.md` → ③ Python 侧按新结构重构（`scripts/` 里与仿真/可视化直接相关的代码迁到 `python/`，`agent_scripts/`、`onetime_tools/` 留在 `scripts/`）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。
+任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/learn/unitree-mujoco.md` → ③ Python 侧按新结构重构（`scripts/` 里与仿真/可视化直接相关的代码迁到 `python/`，`agent_scripts/`、`onetime_tools/` 留在 `scripts/`）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。

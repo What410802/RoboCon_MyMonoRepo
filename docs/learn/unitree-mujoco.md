@@ -2,7 +2,7 @@
 
 研读对象是 `unitreerobotics/unitree_mujoco`（本工作区克隆在 `ReadOnly.d/unitree_mujoco`，commit `1eb6642`，BSD-3-Clause）。目的是给任务 3（结构与线程设计）提供参考、给任务 4（C++ 重做）定结构，并明确**哪些抄、哪些不抄**。文中引用格式为 `文件:行`，文件路径相对该克隆目录。
 
-> 相关文档：MuJoCo 本体知识见 [`mujoco-notes.md`](mujoco-notes.md)，图形栈见 [`graphics-stack.md`](graphics-stack.md)，图形后端与开销实测见根 `README.md` 的「环境与踩坑记录」。
+> 相关文档：MuJoCo 本体知识见 [`mujoco.md`](mujoco.md)，图形栈见 [`graphics-stack.md`](graphics-stack.md)，图形后端与开销实测见 [`mujoco.md` 第 7 节](mujoco.md#7-渲染后端mujoco_gl与开销)。 任务背景与目标结构（这些笔记要服务的对象）见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)。 文档索引见 [`../../README.md`](../../README.md)。
 
 ## 0. 预备知识（线程 / 进程 / DDS）
 
@@ -362,3 +362,10 @@ sequenceDiagram
 - Python：`simulate_python/unitree_mujoco.py`（三个线程与锁）、`simulate_python/unitree_sdk2py_bridge.py`（`LowCmdHandler` 在 `:111-123`）、`simulate_python/config.py`。
 - 官方界面库：`$CONDA_PREFIX/include/simulate/simulate.h`（`Simulate` 的公开成员）、`libsimulate.so`。
 - MuJoCo 自己的线程观：`$CONDA_PREFIX/include/mujoco/mujoco.h` 的 `Threads` 段（只有 `mju_threadpool(d, nthread)`）、`mjdata.h:112-114`（`threadpool` / `threadlock` 字段）。
+
+## 11. 本仓库的落点
+
+上面这些设计与「要改的地方」落到我们自己的代码上（任务 3 的 Python 侧重构 + 任务 4 的 C++ 复刻，推进顺序见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)）：
+
+- `../../@20260923_mujoco/cpp/src/main.cpp`：C++ 程序，头部注释就引用了本文；当前完成到工具链 + 模型加载 + 零力矩静止判定。
+- `../../@20260923_mujoco/scripts/simulate.py` / `simulate_record.py`：Python 侧的最小仿真循环与录像。

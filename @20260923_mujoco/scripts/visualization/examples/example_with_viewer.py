@@ -7,7 +7,7 @@
 
 ## 结论：不难，加 3 行就行；但要让它跑在实时，得顺手改两处
 
-各调用的开销量级（**具体数值是机器相关的**，本机实测见仓库根 `docs/mujoco-notes.md` 第 7 节，
+各调用的开销量级（**具体数值是机器相关的**，本机实测见仓库根 `docs/learn/mujoco.md` 第 7 节，
 用 `scripts/agent_scripts/render_cost.py` 可在本机复现）：
 
 | 调用 | 量级 | 换算 |
@@ -36,7 +36,7 @@
    改成**每 N 步刷一次**（默认 `--sync-every 25` ≈ 20 Hz）就恢复了；
 4. 节流用**截止时间**（目标墙钟时刻 = 起点 + `data.time`，可自我纠偏），而不是“只补本步亏欠”，
    否则 `time.sleep(1.7 ms)` 实际会睡 4~5 ms，偏差会累积
-   （两种写法的实测对比见 `docs/mujoco-notes.md` 第 7.2 节）。
+   （两种写法的实测对比见 `docs/learn/mujoco.md` 第 7.2 节）。
 
 相对你原来的 `simulate.py`，最少只多三处：
 
@@ -53,7 +53,7 @@
 
 - **渲染后端由 `MUJOCO_GL` 决定，且必须在 `import mujoco` 之前生效**（后端在那一刻就选定）。
   Linux 下不设时默认是 `glfw`：它走**显示的 GL**，需要显示服务；在双显卡机器上它还可能落到
-  另一块 GPU 上（差异可达数倍，见 `docs/mujoco-notes.md` 第 7 节），所以**不要靠默认值**。
+  另一块 GPU 上（差异可达数倍，见 `docs/learn/mujoco.md` 第 7 节），所以**不要靠默认值**。
   本仓库在根 `pixi.toml` 的 `[activation.env]` 里统一设了 `egl`。
 - 开窗口的进程退出时偶发 `segmentation fault`，或 `GLFWError: EGL: Failed to clear current
   context ...` 之类的清理告警（GLFW 与已存在的 EGL 上下文在同进程收尾时的冲突）；

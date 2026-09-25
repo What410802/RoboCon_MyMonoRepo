@@ -1,6 +1,6 @@
 // C++ 侧仿真程序（任务 4）。当前是 Stage 0 的「工具链 spike + 静止判定复现」：
 // 先钉死三件事，再往上长成完整程序（结构与线程设计见本目录 README 与
-// docs/unitree-mujoco-notes.md）：
+// docs/learn/unitree-mujoco.md）：
 //   1) pixi 环境里能编译并链接 conda-forge 的 libmujoco（find_package(mujoco)）；
 //   2) 能加载本项目场景（scenes/flat_scene.xml → models/ → meshdir="meshes/" 软链接），
 //      即验证「meshdir 相对顶层文件解析」这条规则在 C++ 下同样成立；

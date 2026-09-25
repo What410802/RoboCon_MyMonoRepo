@@ -65,7 +65,7 @@ TRUNK_OLD = '<body name="trunk" pos="0 0 0">'
 # 目录**各自链接过去，这样所有 XML 里的 meshdir 都能保持原样。
 #
 # 为什么 scenes/ 也要一个：`meshdir` 的解析规则是「相对顶层（main）文件所在目录」
-# 而不是相对它自己 —— 结论与复现见 docs/mujoco-notes.md §6.1。所以 scenes/flat_scene.xml
+# 而不是相对它自己 —— 结论与复现见 docs/learn/mujoco.md §6.1。所以 scenes/flat_scene.xml
 # 去 include models/ 或 assets/ 里的模型时，meshes/ 会在 scenes/ 下找。
 MESH_LINKS = {
     ROOT / "assets/black_description/meshes": "../urdf/meshes",

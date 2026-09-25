@@ -1,6 +1,6 @@
 # unitree_mujoco 进程 / 线程 / 通信细节
 
-本文是 [`unitree-mujoco-notes.md`](unitree-mujoco-notes.md) 的展开版：笔记里只留三条业务主干与结论，**所有"完整展开"的图放这里**。引用约定同笔记 —— `文件:行`，路径基线是 `ReadOnly.d/unitree_mujoco`（conda 环境里的头文件写成 `$INC/...`，`unitree_sdk2` / `unitree_sdk2py` 自身的文件写成其仓库内路径，本机未安装故不给行号）。
+本文是 [`unitree-mujoco.md`](unitree-mujoco.md) 的展开版：笔记里只留三条业务主干与结论，**所有"完整展开"的图放这里**。引用约定同笔记 —— `文件:行`，路径基线是 `ReadOnly.d/unitree_mujoco`（conda 环境里的头文件写成 `$INC/...`，`unitree_sdk2` / `unitree_sdk2py` 自身的文件写成其仓库内路径，本机未安装故不给行号）。 任务背景见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)；文档索引见 [`../../README.md`](../../README.md)。
 
 覆盖范围：**它直接创建或参与管理的进程与线程**。不含操作系统/显卡驱动线程，不含离线工具（`terrain_tool/terrain_generator.py` 只生成 hfield 资源，不参与运行期），不含我们自己的程序。
 
@@ -337,5 +337,5 @@ sequenceDiagram
 
 | 内容 | 位置 |
 |---|---|
-| 三条业务主干、结论清单、API 差异、问题清单、目标设计 | [`unitree-mujoco-notes.md`](unitree-mujoco-notes.md) |
+| 三条业务主干、结论清单、API 差异、问题清单、目标设计 | [`unitree-mujoco.md`](unitree-mujoco.md) |
 | 进程/线程全展开（本文件 §1、§3、§4）、消息与 DDS 接口（§2）、启动/稳态/退出时序（§5-§7）、SDK 先例（§9）、待核实清单（§10） | 本文 |

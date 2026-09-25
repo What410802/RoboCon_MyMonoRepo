@@ -8,7 +8,7 @@
 `sys.path` 把 `scripts/` 加进来（见 `examples/example_attach.py` 开头）。
 
 命令行用法见 `examples/example_attach.py`（它也是零力矩录像的命令行入口）。
-分辨率/帧率的成本与“为什么帧率与机器快慢无关”见仓库根 `docs/mujoco-notes.md` 第 7 节。
+分辨率/帧率的成本与“为什么帧率与机器快慢无关”见仓库根 `docs/learn/mujoco.md` 第 7 节。
 """
 
 from .mujoco_video import CAMERAS, VideoRecorder, build_camera

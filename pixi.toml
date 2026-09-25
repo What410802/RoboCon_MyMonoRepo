@@ -6,7 +6,7 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 # PyPI 备选索引链（国内网络回退源）。为什么选这几个、为什么不加 conda 镜像：
-#   见 README.md「环境与踩坑记录 → pixi / conda / PyPI 镜像」。
+#   见 docs/pitfalls/environment.md 的「pixi / conda / PyPI 镜像」一节。
 # 顺序有意义：pixi 底层是 uv，采用 first-index 策略 —— 按 extra-index-urls 的顺序取第一个
 # 「命中该包」的索引；未设 index-url 时以 pypi.org 兜底。
 [pypi-options]
@@ -16,7 +16,7 @@ extra-index-urls = [
     "https://mirror.nju.edu.cn/pypi/web/simple",
 ]
 
-# 渲染后端（结论与实测见 docs/mujoco-notes.md 第 7 节，决策索引见 §7.6）：
+# 渲染后端（结论与实测见 docs/learn/mujoco.md 第 7 节，决策索引见 §7.6）：
 #   * `MUJOCO_GL` 必须在 `import mujoco` 之前生效，之后改无效 → 放在激活环境里最稳；
 #   * 统一定为 egl：不依赖显示服务，而且在双显卡机器上会落到更合适的那块 GPU 上。
 # 注意它只影响 Python 绑定，不影响 C++ 的 mujoco-simulate。

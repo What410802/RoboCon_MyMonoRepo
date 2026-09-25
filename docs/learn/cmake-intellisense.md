@@ -268,3 +268,5 @@ FormatStyle: file
 - **工作区 `.vscode/`**：放项目属性，如 `files.associations`、`cppStandard`、`compileCommands` 数组、`.clangd` / `.clang-format` / `.clang-tidy`——跟着项目走，别人 clone 下来直接能用
 
 **一句话结论**：clangd = 什么都不配，只要目录叫 `build/` 且不设 `--compile-commands-dir`；cpptools = 必须在 `c_cpp_properties.json` 里把所有子项目的数据库**列成数组**。
+
+**本项目的实际配置**：conda／pixi 工具链特有的问题（`--query-driver` 要写在工作区文件里、clangd 找不到 conda 头文件）与最终采用的写法，见 [`../pitfalls/environment.md`](../pitfalls/environment.md) 的「C++ 工具链（pixi 提供）与编辑器提示」一节。 C++ 语法侧的问答笔记见 [`cpp-cmake.md`](cpp-cmake.md)；文档索引见 [`../../README.md`](../../README.md)。

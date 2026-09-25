@@ -1,6 +1,6 @@
 # 图形 / 渲染 / 视频 栈速查
 
-> 目的：把" GPU 画图"这件事的各个名词放到一张分层图上，标出 **MuJoCo 在哪一层**。 相关文档：[`mujoco-notes.md`](mujoco-notes.md)（第 7 节讲 `MUJOCO_GL` 与渲染开销）、 任务记录 [`@20260923_mujoco/README.md`](../@20260923_mujoco/README.md)。
+> 目的：把" GPU 画图"这件事的各个名词放到一张分层图上，标出 **MuJoCo 在哪一层**。 相关文档：[`mujoco.md`](mujoco.md)（第 7 节讲 `MUJOCO_GL` 与渲染开销）、 [`../pitfalls/environment.md`](../pitfalls/environment.md)（本机的显卡与后端实测）、 任务记录 [`@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)、 上游仿真器结构研读 [`unitree-mujoco.md`](unitree-mujoco.md)；文档索引见 [`../../README.md`](../../README.md)。
 
 ---
 
@@ -120,7 +120,7 @@ flowchart TD
 四个常被忽略的点：
 
 * ②～④ 里 CPU 只是「发命令」，真正画像素的是 GPU，而且是**异步**的（所以 `glReadPixels`/ swap 这类“要结果”的调用才特别贵）；
-* ⑤ 的 swap 通常**阻塞到显示器刷新**（vsync，60/120 Hz）—— 这直接解释了为什么 MuJoCo 里 每步调 `viewer.sync()` 会把仿真钉在 10% 实时（见 [`mujoco-notes.md` 第 7 节](mujoco-notes.md)）；
+* ⑤ 的 swap 通常**阻塞到显示器刷新**（vsync，60/120 Hz）—— 这直接解释了为什么 MuJoCo 里 每步调 `viewer.sync()` 会把仿真钉在 10% 实时（见 [`mujoco.md` 第 7 节](mujoco.md)）；
 * ⑥ 是**应用之外**的事：普通应用并不直接把像素送到屏幕（全屏独占例外），必须经过合成器；
 * 窗口重绘是**事件驱动**的（鼠标、动画定时器、resize），不是“无条件每帧重画”。
 
@@ -200,7 +200,7 @@ sequenceDiagram
 | 管道传输 + 编码 | 系统 ffmpeg + libx264 | **否，纯 CPU** |
 | 封装 / 播放 | ffmpeg / 播放器 | 否 |
 
-实测（960×540，本机 `MUJOCO_GL=egl` → **NVIDIA MX350**）：**渲染 + 回读 5.5 ms/帧**， 整条「渲染 + 回读 + 编码」**7.1 ms/帧** —— 其中编码与管道只占 **~1~2 ms**。 **大头是渲染，不是编码**（详见 [`mujoco-notes.md` 第 7.2 节](mujoco-notes.md)）。
+实测（960×540，本机 `MUJOCO_GL=egl` → **NVIDIA MX350**）：**渲染 + 回读 5.5 ms/帧**， 整条「渲染 + 回读 + 编码」**7.1 ms/帧** —— 其中编码与管道只占 **~1~2 ms**。 **大头是渲染，不是编码**（详见 [`mujoco.md` 第 7.2 节](mujoco.md)）。
 
 ## 6. MuJoCo 在这张图的哪里
 
@@ -208,7 +208,7 @@ sequenceDiagram
 |---|---|
 | **物理仿真本体** | **不在这张图上**：纯 CPU 计算（用 SIMD + 多线程），没有 GPU 版本 |
 | 离屏渲染 `mujoco.Renderer` / `mjr_*` | 图形 API 层的 **OpenGL**（内部实现是 GL/GLES 那套） |
-| 选"走哪条路拿 GL context" | **`MUJOCO_GL`**：`glfw` / `egl` / `glx` / `osmesa`（+ Windows/macOS 的 `wgl`/`cgl`）。见 [`mujoco-notes.md` 第 7 节](mujoco-notes.md) |
+| 选"走哪条路拿 GL context" | **`MUJOCO_GL`**：`glfw` / `egl` / `glx` / `osmesa`（+ Windows/macOS 的 `wgl`/`cgl`）。见 [`mujoco.md` 第 7 节](mujoco.md) |
 | `launch_passive` 交互窗口 | **GLFW**（+ 其背后的 EGL/GLX） |
 | 录像成 MP4 | `Renderer` 出 RGB 帧 → **ffmpeg/libx264**（栈外） |
 | GPU 加速仿真（MJX / MJWarp） | 计算层（**JAX / Warp**），不是渲染层 |

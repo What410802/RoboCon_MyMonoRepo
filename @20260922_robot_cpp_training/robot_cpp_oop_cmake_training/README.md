@@ -12,3 +12,5 @@ sudo apt install -y build-essential cmake git tree nano
 ```bash
 sh scripts/test_all.sh
 ```
+
+本工程是第一次培训任务的提交内容，任务记录与验收见 [`../验收.md`](../验收.md)。

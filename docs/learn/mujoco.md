@@ -1,6 +1,6 @@
 # MuJoCo 知识点与坑点
 
-> 环境：**mujoco 3.12.0**（conda-forge，经仓库根的 `pixi.toml` 管理）。 本文中标「实测」的结论都是跑出来的，不是抄文档；复现命令见文末。 相关任务记录：[`@20260923_mujoco/README.md`](../@20260923_mujoco/README.md) 图形栈（OpenGL / Skia / EGL / GLFW 都是什么）：[`graphics-stack.md`](graphics-stack.md)
+> 环境：**mujoco 3.12.0**（conda-forge，经仓库根的 `pixi.toml` 管理）。 本文中标「实测」的结论都是跑出来的，不是抄文档；复现命令见文末。 相关任务记录：[`@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md) 图形栈（OpenGL / Skia / EGL / GLFW 都是什么）：[`graphics-stack.md`](graphics-stack.md) 本机的环境搭建与踩坑（pixi 环境、镜像、显卡与后端选择、编辑器提示）：[`../pitfalls/environment.md`](../pitfalls/environment.md) 上游 `unitree_mujoco` 研读笔记：[`unitree-mujoco.md`](unitree-mujoco.md)；文档索引见 [`../../README.md`](../../README.md)。
 
 **阅读顺序建议**：§1（两大对象）→ §2~§5（XML 属性速查）→ §6（坑点）→ §7（渲染）→ §8（复现命令）。
 
@@ -454,6 +454,8 @@ update_scene → render()（GPU 画进离屏 FBO）→ tobytes()
 | `meshdir` 不改，改用目录软链接 | `onetime_tools/measure_and_fix_base_height.py` 的 `MESH_LINKS` | §6.1 |
 | 场景/模型/导出目录各放一个 `meshes` 软链接 | `scenes/`、`models/`、`assets/black_description/` | §6.1（`meshdir` 相对顶层文件解析）|
 | 模型里把基座抬到触地高度；不改 `inertiafromgeom` | `onetime_tools/measure_and_fix_base_height.py` | §6.2 |
+
+上面这些落点都在 `@20260923_mujoco/scripts/` 下：录像库核心是 `visualization/mujoco_video.py`，包入口 `visualization/__init__.py` 负责导出 `VideoRecorder`（脚本里直接 `from visualization import VideoRecorder`）。
 
 ---
 
