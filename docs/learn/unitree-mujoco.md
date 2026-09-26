@@ -48,7 +48,7 @@
 
 先破一个常见说法：它**不是“3 进程”也不是“3 线程”** —— 是 **2 个进程**，仿真器进程内是多线程；“3” 指的是**仿真器里的三条业务线**（物理 / UI / DDS 桥）。另有一类不算它设计的线程：**DDS 库内部**的接收与发现线程。
 
-> 完整展开（每个进程的线程全清单、C++ 侧 publisher 自带的发布线程、Python 侧的 `ch_reader`、消息字段、启动/稳态/退出时序、SDK 的双缓冲先例）见 [`unitree-mujoco-threads.md`](unitree-mujoco-threads.md)。
+> 完整展开（每个进程的线程全清单、C++ 侧 publisher 自带的发布线程、Python 侧的 `ch_reader`、消息字段、启动/稳态/退出时序、SDK 的双缓冲先例）见 [`runtime-timing.md`](runtime-timing.md)。
 
 ```mermaid
 flowchart LR
@@ -216,7 +216,7 @@ flowchart LR
 
 这里能看出两个结构问题：**用轮询 + 睡眠同步启动顺序**（而不是条件变量或事件），以及**保活线程什么都不做却常驻**。反过来，`RecurrentThread` 那种“给周期 + 回调”的抽象很省事，值得学。
 
-逐步时序图（C++ / Python 各一张）见 [`unitree-mujoco-threads.md`](unitree-mujoco-threads.md) §5。
+步骤时序图（C++ / Python 各一张）见 [`runtime-timing.md`](runtime-timing.md) §5。
 
 ## 4. 稳态一步：主干数据流
 

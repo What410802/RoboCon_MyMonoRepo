@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+</head>
+<body style="margin:0;background:#fff">
+<pre class="mermaid">gantt
+    title 五种方案各跑一轮的耗时对比（横轴 = ms；一轮 = 一次循环，红色 = 物理被顶住）
+    dateFormat X
+    axisFormat %s
+    tickInterval 5second
+    section ② 上游 Python·物理线程（一轮 43 ms）
+    自定速 4 步（dt=5ms，放大 dt 就是在迁就渲染） : p2a, 0, 20s
+    等锁 → 物理完全停摆 23ms : crit, p2b, after p2a, 23s
+    section ② 上游 Python·渲染线程
+    空闲（锁没人拿，物理在跑） : p2c, 0, 20s
+    viewer.sync()（含绘制，锁内）23ms : crit, p2d, after p2c, 23s
+    ② 一轮 43 ms，物理只拿到 20 ms : milestone, p2m, after p2d, 1s
+    section ⑤ baseline·唯一线程（一轮 24 ms）
+    步进 1 步（放大到 1ms） : p5a, 0, 1s
+    渲染 + swap，物理被顶住 23ms : crit, p5b, after p5a, 23s
+    ⑤ 一轮 24 ms 只推进 2 ms 仿真 : milestone, p5m, after p5b, 1s
+    section ④ 我们 Python·物理线程（一轮 20 ms）
+    连续步进（独占 physics_data，不等渲染） : p4a, 0, 20s
+    section ④ 我们 Python·渲染线程
+    读快照副本 + 渲染 : p4b, 0, 10s
+    空闲（等下一帧） : p4c, after p4b, 10s
+    ④ 一轮 20 ms，物理拿到全部 20 ms : milestone, p4m, after p4c, 1s
+    section ① 上游 C++·物理线程（一帧 17 ms）
+    成批 mj_step + 自定速（只在快照那一瞬让步） : p1a, 0, 17s
+    section ① 上游 C++·渲染线程
+    快照 : p1b, 0, 1s
+    渲染 + swap（锁外） : p1c, after p1b, 9s
+    空闲（等下一帧） : p1d, after p1c, 7s
+    ① 一帧 17 ms，物理只让出快照那一瞬 : milestone, p1m, after p1d, 1s
+    section ③ 我们 C++·物理线程（一帧 17 ms）
+    每 2ms 一步 + 睡眠（墙钟节流 1x，从不等待渲染） : p3a, 0, 17s
+    section ③ 我们 C++·渲染线程
+    快照 : p3b, 0, 1s
+    渲染 + swap（锁外） : p3c, after p3b, 9s
+    空闲（等下一帧） : p3d, after p3c, 7s
+    ③ 一帧 17 ms，物理拿到全部 17 ms : milestone, p3m, after p3d, 1s
+</pre>
+<script>mermaid.initialize({ startOnLoad: true });</script>
+</body>
+</html>

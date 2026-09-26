@@ -41,4 +41,4 @@ C++ 侧同一判据（`../cpp_task2/`）：`rest_check` 跑 8 s → 末 1 s 漂�
 | `output/python/example_attach.mp4` | `pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py`（把录像接进一个“已有”循环） |
 | `output/python/record_with_viewer.mp4` | `pixi run python @20260923_mujoco/scripts/visualization/examples/example_with_viewer.py`（一边开窗口一边录；10 fps，否则跟不上实时） |
 | `output/python/preview_iso.png`、`output/python/preview_side.png` | `pixi run python @20260923_mujoco/scripts/visualization/render_preview.py [--camera iso\|side]` |
-| `output/cpp/cpp_record.mp4` | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim`（C++ 离屏渲染 → ffmpeg；4 仿真秒、50 fps、**191 帧 / 3.82 s / 960×540**，画面为全程趴卧） |
+| `output/cpp/cpp_record.mp4` | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim --mode record`（C++ 离屏渲染 → ffmpeg；4 仿真秒、50 fps、**191 帧 / 3.82 s / 960×540**，画面为全程趴卧） |

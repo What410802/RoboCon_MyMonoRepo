@@ -162,7 +162,7 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 
 ## 2026-09-25 复现上游 unitree_mujoco（C++ 与 Python 两条路线）
 
-> 用途与任务背景见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md) 的「复现上游参考实现」一节；复现解决的那个疑问（`LowCmd` 回调归属）见 [`../learn/unitree-mujoco-threads.md`](../learn/unitree-mujoco-threads.md) §10。两个自建环境都不入库，放在工作区同级目录 `Replicate.d/`：`unitree_mujoco/{python,cpp}/` 各一个 pixi 环境，与环境、版本无关的 SDK 放顶层 `Replicate.d/unitree_sdk2/` 共用。
+> 用途与任务背景见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md) 的「复现上游参考实现」一节；复现解决的那个疑问（`LowCmd` 回调归属）见 [`../learn/runtime-timing.md`](../learn/runtime-timing.md) §10。两个自建环境都不入库，放在工作区同级目录 `Replicate.d/`：`unitree_mujoco/{python,cpp}/` 各一个 pixi 环境，与环境、版本无关的 SDK 放顶层 `Replicate.d/unitree_sdk2/` 共用。
 
 - **两条路线各自单独建环境，不动任务主环境**。Python 侧必须 `python=3.10`：`unitree_sdk2_python/setup.py` 钉死 `cyclonedds==0.10.2`，而该版本只发布了 **cp310** 轮子，cp311/cp312 都是 0 个（`curl -s https://mirrors.ustc.edu.cn/pypi/simple/cyclonedds/ | grep -c 'cyclonedds-0.10.2.*cp312'` → `0`），在 3.12 上只能源码编 Cyclone DDS。C++ 侧不能复用主环境：官方包里的 `libmujoco.so` 会和 conda 的 `mujoco` 撞车。
 - **旧 `opencv-python` 与 numpy 2 不兼容**：pip 那份 `opencv-python 4.5.5` 是按 numpy 1.x ABI 编的，在 numpy 2.2.6 下 `import cv2` 报 `numpy.core.multiarray failed to import`；把 numpy 钉到 `1.26` 即可（也符合该 SDK 的年代）。

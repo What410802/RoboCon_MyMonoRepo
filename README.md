@@ -44,7 +44,7 @@ pixi run env MUJOCO_GL=glfw python @20260923_mujoco/scripts/simulate.py
 | [`mujoco.md`](docs/learn/mujoco.md) | MuJoCo 知识点与坑点：`MjModel` / `MjData`、`geom` / `friction` / `condim`、渲染后端（§7）、决策反向索引（[§7.6](docs/learn/mujoco.md#76-这些结论驱动了哪些配置决策)）、复现命令（§8） |
 | [`graphics-stack.md`](docs/learn/graphics-stack.md) | 图形 / 渲染 / 视频栈速查（OpenGL、Skia、DirectX、EGL、GLFW 各在哪一层） |
 | [`unitree-mujoco.md`](docs/learn/unitree-mujoco.md) | 上游 `unitree_mujoco` 研读笔记：架构、线程、通信与目标设计 |
-| [`unitree-mujoco-threads.md`](docs/learn/unitree-mujoco-threads.md) | 同上，展开到进程 / 线程 / 通信的时序细节 |
+| [`runtime-timing.md`](docs/learn/runtime-timing.md) | 同上，展开到进程 / 线程 / 通信的时序细节；§11 是五种方案的每帧阻滞对比 |
 | [`cpp-cmake.md`](docs/learn/cpp-cmake.md) | C++ 与 CMake 问答笔记（`virtual` / `explicit` / `override`、`const` 成员函数、头文件扩展名、类内 vs 类外定义、CMake target） |
 | [`cmake-intellisense.md`](docs/learn/cmake-intellisense.md) | VSCode C++ / CMake 智能提示配置（语言模式、clangd / cpptools、编译数据库） |
 

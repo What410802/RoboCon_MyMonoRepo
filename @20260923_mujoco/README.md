@@ -28,7 +28,7 @@ pixi run python @20260923_mujoco/scripts/agent_scripts/rest_check.py       # 任
 pixi run cmake -S @20260923_mujoco/cpp_task2 -B @20260923_mujoco/cpp_task2/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
 pixi run cmake --build @20260923_mujoco/cpp_task2/build
 pixi run @20260923_mujoco/cpp_task2/build/rest_check                       # C++ 版：静止判定，同一场景、同一判据
-pixi run @20260923_mujoco/cpp_task2/build/dog_sim                          # C++ 版：最小仿真（默认录像）
+pixi run @20260923_mujoco/cpp_task2/build/dog_sim                          # C++ 版：最小仿真（默认开官方 Simulate 窗口）
 ```
 
 ### 任务 4（新结构：Python 侧已在 `python/` 落地，C++ 侧复刻在 `cpp/`）
@@ -40,6 +40,17 @@ pixi run env MUJOCO_GL=glfw python @20260923_mujoco/python/main.py          # �
 pixi run python @20260923_mujoco/python/main.py --no-viewer --seconds 8     # 无窗口跑 8 仿真秒
 pixi run python @20260923_mujoco/scripts/agent_scripts/physics_pacing.py    # 检查：渲染不顶住物理
 ```
+
+**为什么非阻塞（双缓冲）是必要的**：`scripts/simulate.py` 是最朴素的单线程写法——一圈里 `mj_step` 之后紧跟 `viewer.sync()`，而 `viewer.sync()` 要等一个刷新周期（本机实测中位 **23.1 ms**）≫ `timestep`（0.002 s），一圈只推进 0.002 s 仿真，整个循环被显示刷新钉住。实测（本机 i5-1035G1、960×540、`MUJOCO_GL=glfw`）：
+
+| 结构 | 开销 | 实时率 |
+|---|---|---|
+| 纯 `mj_step`（无窗口） | 0.0432 ms/步（C++ 侧 0.0404 ms） | — |
+| `scripts/simulate.py`：`mj_step` + `viewer.sync()` 同线程、**每步都 sync** | 23.1 ms/圈，一圈才走 0.002 s | **0.089x** |
+| `python/main.py`：物理线程 + 渲染线程、锁只罩快照 memcpy、deadline pacing | 渲染 20 ms/次也不顶住物理 | **0.998x**（开窗口约 0.86x，GIL 限制） |
+| `cpp_task2 --mode view`：物理线程 + 官方 `Simulate` 界面 | 官方 `RenderLoop` 在 `Render()` **之前**就放锁（源码注释 `// MutexLock (unblocks simulation thread)`） | **1.00x** |
+
+也正因为如此，`scripts/simulate.py` 里那句被注释掉的 `[WARN] Simulation speed decreased.` 在本机是常态（每圈都会触发）；上游把 `SIMULATE_DT` 放大到 0.005 s 正是在迁就这件事（`config.py:13` 的注释明说）。**结论：要一边按墙钟实时看、一边推进物理，非阻塞（快照 + 双缓冲）不是可选优化，而是必要条件**——纯物理本身就够快（0.04 ms/步），问题全在「谁在等谁」。
 
 ## 目录结构
 
@@ -135,21 +146,28 @@ pixi run python @20260923_mujoco/scripts/agent_scripts/physics_pacing.py    # �
 
 | 可执行文件 | 对标 | 干什么 |
 |---|---|---|
-| `rest_check` | `scripts/agent_scripts/rest_check.py` | 读场景自带的 `rest` keyframe、零力矩跑 N 秒，打印基座漂移/末段 max\|qvel\|/接触点数；静止退出码 0、否则 2 |
-| `dog_sim` | `scripts/simulate_record.py` | 不加载 keyframe（默认位形自然塌成趴卧）、零力矩跑 N 秒（默认 4 s），**默认顺带录像** |
+| `rest_check` | `scripts/agent_scripts/rest_check.py` | 读场景自带的 `rest` keyframe、零力矩跑 N 秒，打印基座漂移/末段 max\|qvel\|/接触点数；退出码：0 = 静止趴住、2 = 判“未静止”、1 = 参数写错 |
+| `dog_sim` | `scripts/simulate.py` / `simulate_record.py` | 不加载 keyframe（默认位形自然塌成趴卧）、零力矩跑 N 秒（默认 4 s）；三种模式：`--mode sim` 只仿真（无窗口无录像，全速）、`--mode record` 离屏录像、`--mode view`（**默认**）开 MuJoCo 官方 Simulate 窗口（时长不限，关窗结束） |
 
 ```bash
 pixi run cmake -S @20260923_mujoco/cpp_task2 -B @20260923_mujoco/cpp_task2/build -G Ninja -DCMAKE_PREFIX_PATH="$CONDA_PREFIX"
 pixi run cmake --build @20260923_mujoco/cpp_task2/build
 pixi run @20260923_mujoco/cpp_task2/build/rest_check                                                 # 静止判定（默认 8 s），退出码 0 = 静止
 pixi run @20260923_mujoco/cpp_task2/build/rest_check @20260923_mujoco/scenes/flat_scene_raw.xml 2   # 反例：穿模被弹飞，判“未静止”
-pixi run @20260923_mujoco/cpp_task2/build/dog_sim                                                    # 默认 4 s，录到 output/cpp/cpp_record.mp4
-pixi run @20260923_mujoco/cpp_task2/build/dog_sim @20260923_mujoco/scenes/flat_scene.xml 3 --no-record   # 只跑不录；另有 --out/--fps/--width/--height/--camera
+pixi run @20260923_mujoco/cpp_task2/build/dog_sim                                                    # 默认：开官方 Simulate 窗口（关窗结束）
+pixi run @20260923_mujoco/cpp_task2/build/dog_sim --mode record                                      # 离屏录像，录到 output/cpp/cpp_record.mp4
+pixi run @20260923_mujoco/cpp_task2/build/dog_sim @20260923_mujoco/scenes/flat_scene.xml 3 --mode sim # 只仿真（无窗口无录像）
 ```
+
+两个程序的命令行都**不接受认不出的选项**：写错就直接报错退出（退出码 1）并打印用法，不会把 `--p` 这种未知选项默默当成场景路径；数值参数（`seconds`、`--fps/--width/--height`）不是数字、`--out` 这类缺值、`--mode` 不是 sim/record/view、位置参数超过两个也都同样报错。两个程序的解析逻辑都集中在 `cpp_task2/src/args.h`（`OptionDef` + `Args` + `ParseArgs`），主程序只声明自己认哪些选项、再取值。
 
 实测（8 s、`ctrl=0`）：末 1 s xy 漂移 4.440e-10 m、末态 max|qvel| 6.06e-09、接触点数 8，与 Python 侧 `rest_check.py` **同一判据**（漂移 4.440e-10 m、ncon=8）。产物清单见 [`docs/task2.md`](docs/task2.md)。
 
-**录像**（`dog_sim` 默认就录，对应 Python 侧的 `VideoRecorder`）：离屏渲染（隐藏窗口拿 GL 上下文）→ `mjr_readPixels` → ffmpeg 管道，代码在 `cpp_task2/src/record.h`；出帧按 **仿真时间** 决定，所以 MP4 的时间轴 = 仿真时间、与机器快慢无关；`--no-record` 可关，`--out/--fps/--width/--height/--camera` 可调。实测 4 仿真秒 @50 fps → `output/cpp/cpp_record.mp4`：**191 帧 / 3.82 s / 960×540**。离屏缓冲实际是 1280×720 这件事见 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的图形后端一节。
+**录像**（`--mode record`，对应 Python 侧的 `VideoRecorder`）：离屏渲染（隐藏窗口拿 GL 上下文）→ `mjr_readPixels` → ffmpeg 管道，代码在 `cpp_task2/src/record.h`；出帧按 **仿真时间** 决定，所以 MP4 的时间轴 = 仿真时间、与机器快慢无关；`--out/--fps/--width/--height/--camera` 可调。实测 4 仿真秒 @50 fps → `output/cpp/cpp_record.mp4`：**191 帧 / 3.82 s / 960×540**。离屏缓冲实际是 1280×720 这件事见 [`../docs/pitfalls/environment.md`](../docs/pitfalls/environment.md) 的图形后端一节。
+
+**窗口模式**（`--mode view`，默认）：链的是 conda 包里 MuJoCo 自带的官方界面库（`mujoco::libmujoco_simulate`，即 `mj::Simulate` + `mj::GlfwAdapter`），所以窗口与 Python 的默认窗口、`unitree_mujoco` 的 C++ 窗口**是同一个界面**：能暂停/单步/调速/换相机/拖动物体。起点与另两种模式一致（不加载 keyframe，零力矩从默认位形塌成趴卧）；物理线程把仿真时间轴钉在墙钟上（速度取界面上的下拉框，**上限 100%、不会比实时快**；实际倍率写回界面的 Real-time 显示），主线程跑 `RenderLoop()`（官方要求它在主线程），关窗后通知物理线程收工。时长**默认不限**，关窗才结束；给了 `seconds` 就到那个仿真时刻停止推进物理，窗口继续开着方便观察。
+
+一个坑：`Simulate::Load` 内部会**阻塞等渲染线程来接模型**（条件变量 `cond_loadrequest`），所以顺序必须是「主线程先跑 `RenderLoop()`，再由物理线程 `Load`」（官方 `main.cc` 就是把加载放在 `PhysicsThread` 里）；在 `RenderLoop` 之前调 `Load`，结果是开了一个窗口却一帧不画（任务栏有条目、Alt+Tab 里没有、内容空白）外加永久等待。
 
 ### 任务 4 的落点（`cpp/`）
 
@@ -161,7 +179,7 @@ pixi run @20260923_mujoco/cpp_task2/build/dog_sim @20260923_mujoco/scenes/flat_s
 
 - [ ] 任务 1：认识 MuJoCo（作用、Python 接口、MJCF 结构）
 - [x] 任务 2：URDF→MJCF、平地场景、零力矩静止趴卧、力矩执行器（结果见 [`docs/task2.md`](docs/task2.md)；C++ 侧 `cpp_task2/` 同判据）
-- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（研读笔记 → [`../docs/learn/unitree-mujoco.md`](../docs/learn/unitree-mujoco.md)，线程/通信细节 → [`../docs/learn/unitree-mujoco-threads.md`](../docs/learn/unitree-mujoco-threads.md)；**Python 侧已落地**：[`python/`](python/) 用双缓冲把渲染与物理拆开。实测（`scripts/agent_scripts/physics_pacing.py`）：同等 20 ms/次渲染下，无窗口我们 499 步/秒（实时 0.998x）、上游式单锁写法 271 步/秒（0.542x），且物理结果与单线程裸循环逐位相同；开窗口时降到 0.863x——那是 Python 的 GIL 争用（渲染那一步在 Python 里），不是锁，留给任务 4 用 C++ 解决）
+- [ ] 任务 3：参考 unitree_mujoco 优化代码结构与线程设计（研读笔记 → [`../docs/learn/unitree-mujoco.md`](../docs/learn/unitree-mujoco.md)，线程/通信细节与五种方案的每帧阻滞对比 → [`../docs/learn/runtime-timing.md`](../docs/learn/runtime-timing.md)；**Python 侧已落地**：[`python/`](python/) 用双缓冲把渲染与物理拆开。实测（`scripts/agent_scripts/physics_pacing.py`）：同等 20 ms/次渲染下，无窗口我们 499 步/秒（实时 0.998x）、上游式单锁写法 271 步/秒（0.542x），且物理结果与单线程裸循环逐位相同；开窗口时降到 0.863x——那是 Python 的 GIL 争用（渲染那一步在 Python 里），不是锁，留给任务 4 用 C++ 解决）
 - [ ] 任务 4（选做）：用 C++ 重做（任务 2 的 C++ 版已落到 [`cpp_task2/`](cpp_task2/)；任务 4 的双缓冲结构待在 [`cpp/`](cpp/) 实现，对齐 [`python/`](python/)）
 
 任务 3/4 的推进顺序：① C++ 工具链可行性验证（已完成）→ ② 研读 `unitree_mujoco`、写 `docs/learn/unitree-mujoco.md`（已完成）→ ③ Python 侧按新结构重构（**已完成**：`python/`，`scripts/` 里的旧脚本暂留作对照）→ ④ C++ 复刻同一结构（先无窗口 + 录制，再接官方 `Simulate` 界面）。

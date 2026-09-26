@@ -16,6 +16,8 @@
 #include <string>
 #include <vector>
 
+#include "args.h"
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -40,20 +42,15 @@ struct Options {
     double seconds = 8.0;
 };
 
-bool ParseArgs(int argc, char **argv, Options &o) {
-    int positional = 0;
-    for (int i = 1; i < argc; ++i) {
-        const std::string a = argv[i];
-        if (a == "--help" || a == "-h") {
-            std::printf("%s", kUsage);
-            return false;
-        } else if (positional++ == 0) {
-            o.scene = a;
-        } else {
-            o.seconds = std::atof(a.c_str());
-        }
-    }
-    return true;
+// 参数解析交给 args.h；本程序没有选项，位置参数最多两个（scene、seconds）
+Options ParseArgs(int argc, char **argv) {
+    const Args args = ::ParseArgs(argc, argv, kUsage, {}, /*max_positional=*/2);
+    Options o;
+    if (!args.positional.empty())
+        o.scene = args.positional[0];
+    if (args.positional.size() > 1)
+        o.seconds = Args::ParseNum(args.positional[1], "seconds", kUsage);
+    return o;
 }
 
 } // namespace
@@ -65,9 +62,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    Options opt;
-    if (!ParseArgs(argc, argv, opt))
-        return 0;
+    // --help 与参数错误都在里面退出
+    const Options opt = ParseArgs(argc, argv);
 
     // 固定路径：可执行文件应为 <任务目录>/cpp_task2/build/dog_sim，往上两层就是任务目录。
     // （成品代码不做向上搜索；要换构建目录就用第一个参数直接给 scene.xml。）

@@ -20,4 +20,4 @@ C++   ：Replicate.d/unitree_mujoco/cpp 下跑 ./build/unitree_mujoco（带官�
 
 两个数不一致本身就是发现：两边时间步不同（Python `SIMULATE_DT = 0.005`、C++ `0.002`），伺服收敛位形因此不同；做 A/B 对比时不能直接把两边的绝对高度拿来比。
 
-复现顺带确认的两件事（对做任务 3 有用）：**回调归属**（带队列的订阅回调跑在 SDK 自建线程 `rlsnr` / `ch_reader`，`queueLen=0` 才跑在 DDS 接收线程）见 [`../../docs/learn/unitree-mujoco-threads.md`](../../docs/learn/unitree-mujoco-threads.md) §10；上游**控制器没有 stdin 控制**、`#define private public` 覆盖 GLFW 回调导致官方快捷键失效等一批问题，见 [`../../docs/learn/unitree-mujoco.md`](../../docs/learn/unitree-mujoco.md) §7 的问题清单。
+复现顺带确认的两件事（对做任务 3 有用）：**回调归属**（带队列的订阅回调跑在 SDK 自建线程 `rlsnr` / `ch_reader`，`queueLen=0` 才跑在 DDS 接收线程）见 [`../../docs/learn/runtime-timing.md`](../../docs/learn/runtime-timing.md) §10；上游**控制器没有 stdin 控制**、`#define private public` 覆盖 GLFW 回调导致官方快捷键失效等一批问题，见 [`../../docs/learn/unitree-mujoco.md`](../../docs/learn/unitree-mujoco.md) §7 的问题清单。
