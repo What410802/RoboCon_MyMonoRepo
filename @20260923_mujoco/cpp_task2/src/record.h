@@ -21,14 +21,21 @@
 #include <GLFW/glfw3.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 class OffscreenRecorder {
   public:
-    OffscreenRecorder(const mjModel *m, const std::string &path, int width, int height, double fps,
+    OffscreenRecorder(mjModel *m, const std::string &path, int width, int height, double fps,
                       const std::string &camera)
-        : path_(path), fps_(fps) {
+        : path_(std::filesystem::absolute(path).lexically_normal().string()), fps_(fps) {
+        // 离屏 framebuffer 的大小就是模型里的 <visual><global offwidth/offheight>（默认 640x480，
+        // 本任务场景声明的是 1280x720）—— 不是隐藏窗口的尺寸。直接把它改成请求的输出尺寸，
+        // 渲染就**原生**发生在输出分辨率上，不用再缩放（Python 侧 VideoRecorder 也是这么做的）。
+        // 必须在 mjr_makeContext 之前改：offscreen framebuffer 是那时按这两个字段分配的。
+        m->vis.global.offwidth = width;
+        m->vis.global.offheight = height;
         if (!glfwInit())
             mju_error("glfwInit 失败");
         glfwWindowHint(GLFW_VISIBLE, 0); // 隐藏窗口
@@ -46,17 +53,22 @@ class OffscreenRecorder {
         mjr_makeContext(m, &con_, mjFONTSCALE_150);
         mjr_setBuffer(mjFB_OFFSCREEN, &con_);
 
-        // 关键：离屏缓冲的实际大小由驱动/显示缩放决定（本机 960x540 的窗口会拿到 1280x720 的 framebuffer），
-        // 必须按**实际视口**告诉 ffmpeg 每帧多少字节，再用 scale 缩到请求尺寸，否则帧对不齐。
+        // 按**实际视口**（mjr_maxViewport）告诉 ffmpeg 每帧多少字节：正常情况它等于上面设的请求
+        // 尺寸；万一驱动把它夹小了，就再 scale 到输出尺寸，否则帧对不齐。
         viewport_ = mjr_maxViewport(&con_);
+        out_width_ = width;
+        out_height_ = height;
         rgb_.resize(static_cast<size_t>(3) * viewport_.width * viewport_.height);
         depth_.resize(static_cast<size_t>(viewport_.width) * viewport_.height);
 
+        char scale[64] = "";
+        if (viewport_.width != width || viewport_.height != height)
+            std::snprintf(scale, sizeof(scale), ",scale=%d:%d", width, height);
         char cmd[1024];
         std::snprintf(cmd, sizeof(cmd),
                       "ffmpeg -y -loglevel error -f rawvideo -pix_fmt rgb24 -s %dx%d -r %g -i -"
-                      " -vf vflip,scale=%d:%d -c:v libx264 -pix_fmt yuv420p -crf 18 \"%s\"",
-                      viewport_.width, viewport_.height, fps, width, height, path.c_str());
+                      " -vf vflip%s -c:v libx264 -pix_fmt yuv420p -crf 18 \"%s\"",
+                      viewport_.width, viewport_.height, fps, scale, path_.c_str());
         pipe_ = ::popen(cmd, "w");
         if (pipe_ == nullptr)
             mju_error("打不开 ffmpeg 管道（PATH 里有 ffmpeg 吗？）");
@@ -83,9 +95,14 @@ class OffscreenRecorder {
     OffscreenRecorder(const OffscreenRecorder &) = delete;
     OffscreenRecorder &operator=(const OffscreenRecorder &) = delete;
 
-    // 到时间就出一帧；返回值表示这一帧有没有出（mjv_updateScene 要非 const 的 mjData）
+    // 到点就出一帧；返回值表示这一帧有没有出（mjv_updateScene 要非 const 的 mjData）。
+    // 出帧时刻取**严格网格** k/fps_（第 k 帧对应 k/fps_ 仿真秒），而不是“距上次出帧过了 1/fps_ 就出”：
+    // 后者在 1/fps_ 不能整除 dt 时会漂——实测 5 仿真秒 @50 fps 只出 236 帧（4.72 s 的片子，比仿真快 6%）、
+    // @120 fps 只出 500 帧（4.17 s，快 20%），MP4 的时间轴就不再等于仿真时间。
+    // 代价：帧时刻要对齐到最近的物理步（最多晚一个 dt，帧间仍按 1/fps_ 排布、不累积）；
+    // fps_ > 1/dt（本模型 500 fps）时物理步不够用，只能丢掉来不及渲染的网格点（同 Python 侧）。
     bool Capture(const mjModel *m, mjData *d) {
-        if (have_frame_ && d->time - last_time_ <= 1.0 / fps_)
+        if (have_frame_ && d->time < next_time_ - 1e-12)
             return false;
         mjv_updateScene(m, d, &opt_, nullptr, &cam_, mjCAT_ALL, &scn_);
         mjr_render(viewport_, &scn_, &con_);
@@ -96,9 +113,11 @@ class OffscreenRecorder {
 
         mjr_readPixels(rgb_.data(), depth_.data(), viewport_, &con_);
         std::fwrite(rgb_.data(), 3, rgb_.size() / 3, pipe_);
-        last_time_ = d->time;
         have_frame_ = true;
         ++frames_;
+        next_time_ = frames_ / fps_; // 下一帧的仿真时刻按帧数推，不累加，避免浮点误差
+        if (next_time_ <= d->time)   // 网格点落在当前时刻之前：跳到前方（别在同一时刻连出两帧）
+            next_time_ = d->time + 1.0 / fps_;
         return true;
     }
 
@@ -119,10 +138,14 @@ class OffscreenRecorder {
     const std::string &path() const { return path_; }
     int viewport_width() const { return viewport_.width; }
     int viewport_height() const { return viewport_.height; }
+    // 视口尺寸与输出尺寸不一致（驱动夹小了 / 调用方另外要求缩放）时为真
+    bool scaled() const { return out_width_ != viewport_.width || out_height_ != viewport_.height; }
 
   private:
     std::string path_;
     double fps_ = 50.0;
+    int out_width_ = 0;
+    int out_height_ = 0;
     GLFWwindow *window_ = nullptr;
     std::FILE *pipe_ = nullptr;
     mjvCamera cam_;
@@ -132,7 +155,7 @@ class OffscreenRecorder {
     mjrRect viewport_{};
     std::vector<unsigned char> rgb_;
     std::vector<float> depth_;
-    double last_time_ = 0.0;
+    double next_time_ = 0.0; // 下一帧的仿真时刻（严格网格 k/fps_）
     bool have_frame_ = false;
     int frames_ = 0;
 };

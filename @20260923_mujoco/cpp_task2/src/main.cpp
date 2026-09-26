@@ -8,7 +8,7 @@
 // sim/record 两个模式的循环只按**仿真时间**收尾——没有窗口就没有 viewer.is_running() 可用。
 //
 // 用法：dog_sim [scene.xml] [seconds] [--mode sim|record|view] [--out FILE] [--fps N] [--width N] [--height N] [--camera NAME]
-//   默认：../scenes/flat_scene.xml、4 仿真秒、--mode view；record 模式录到 ../output/cpp/cpp_record.mp4。
+//   默认：../scenes/flat_scene.xml、4 仿真秒、--mode view；record 模式录到 ../output/cpp/rest_down.mp4。
 
 #include <glfw_adapter.h> // mujoco::GlfwAdapter
 #include <mujoco/mujoco.h>
@@ -38,7 +38,9 @@ const char *kUsage =
     "用法：dog_sim [scene.xml] [seconds] [--mode sim|record|view] [--out FILE] [--fps N] "
     "[--width N] [--height N] [--camera NAME]\n"
     "  --mode sim    只仿真（无窗口无录像，全速）\n"
-    "  --mode record 仿真 + 离屏录像（默认录到 ../output/cpp/cpp_record.mp4）\n"
+    "  --mode record 仿真 + 离屏录像（默认录到 ../output/cpp/rest_down.mp4）\n"
+    "  --out FILE    改录像输出路径：不给就用上面那个默认（相对可执行文件的固定位置，与当前目录\n"
+    "                无关）；给了就按你写的路径解析（相对*当前目录*），终端里打的是绝对路径\n"
     "  --mode view   仿真 + MuJoCo 官方 Simulate 窗口（默认模式；时长不限、关窗结束，\n"
     "                给了 seconds 就到那个仿真时刻停止推进，窗口仍开着）\n"
     "  默认 ../scenes/flat_scene.xml；sim/record 默认 4 仿真秒\n";
@@ -58,7 +60,7 @@ struct Options {
     double seconds = 4.0; // sim/record 的时长；view 下只有显式给了才用
     bool seconds_given = false;
     std::string mode = "view"; // sim / record / view
-    fs::path out;              // 空 = 默认 output/cpp/cpp_record.mp4
+    fs::path out;              // 空 = 默认 output/cpp/rest_down.mp4
     double fps = 50.0;
     int width = 960;
     int height = 540;
@@ -85,20 +87,43 @@ void PhysicsThreadView(mujoco::Simulate &sim, mjModel *m, mjData *d, std::atomic
     }
     std::printf("窗口：模型已交给界面（暂停/单步/调速/换相机都在窗口里）\n");
 
+    // 计时分两套，千万别混用（混用过的后果见 ../docs/stand.md 踩坑 9）：
+    //   * wall0 / sim0 —— 只给**节流**当基准：界面按暂停、或"落后太多重新对齐"时会重置；
+    //   * wall_begin / sim_begin / paused_total —— 只给**报告**用，从线程开始到收工永不重置，
+    //     暂停时长单独扣掉（否则在界面里暂停一会儿，"倍实时"会被算成 0.5 以下）。
     auto wall0 = Clock::now();
     double sim0 = d->time;
     const auto wall_elapsed = [&] { return seconds(Clock::now() - wall0); };
+    const auto wall_begin = Clock::now();
+    const double sim_begin = d->time;
+    double paused_total = 0.0;
+    auto pause_begin = Clock::now();
+    bool paused = false;
+    // 报告口径：仿真时长 / "活动墙钟"（扣掉暂停），分子分母同一起点
+    const auto wall_active = [&] {
+        return seconds(Clock::now() - wall_begin) - paused_total -
+               (paused ? seconds(Clock::now() - pause_begin) : 0.0);
+    };
+    const auto sim_done = [&] { return d->time - sim_begin; };
     while (sim.exitrequest == 0) {
         if (stop_time > 0 && d->time >= stop_time) {
-            std::printf("窗口：已到 %.3f 仿真秒（wall %.2f s），物理线程收工（窗口还开着）\n", d->time,
-                        wall_elapsed());
+            std::printf("窗口：已到 %.3f 仿真秒（wall %.2f s，%.2f 倍实时），物理线程收工（窗口还开着）\n",
+                        sim_done(), wall_active(), sim_done() / std::max(1e-9, wall_active()));
             return;
         }
-        if (sim.run == 0) { // 界面里按了暂停：这段墙钟不计入节流
+        if (sim.run == 0) { // 界面里按了暂停：这段墙钟既不计入节流，也不计入"活动墙钟"
+            if (!paused) {
+                paused = true;
+                pause_begin = Clock::now();
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
             wall0 = Clock::now();
             sim0 = d->time;
             continue;
+        }
+        if (paused) {
+            paused = false;
+            paused_total += seconds(Clock::now() - pause_begin);
         }
         {
             const std::lock_guard<Mutex> lock(sim.mtx);
@@ -117,8 +142,14 @@ void PhysicsThreadView(mujoco::Simulate &sim, mjModel *m, mjData *d, std::atomic
             wall0 = Clock::now();
             sim0 = d->time;
         }
-        sim.measured_slowdown = static_cast<float>(slowdown);
+        // 界面里那个 Real-time 百分比读的是 measured_slowdown，官方定义是"墙钟/仿真"（界面显示
+        // 100/它，并与下拉框目标值比对、偏差超 10% 就告警），所以要写**实测值**——
+        // 之前把目标值塞进去，界面等于永远显示"已对齐"，跟不上也不会告警。
+        sim.measured_slowdown = static_cast<float>(wall_active() / std::max(1e-9, sim_done()));
     }
+    // 实时率只能在这里报：main 那边的 wall 含开窗、加载与收尾，不是物理线程的墙钟
+    std::printf("窗口：物理线程收工（仿真 %.3f s，wall %.2f s，%.2f 倍实时）\n", sim_done(), wall_active(),
+                sim_done() / std::max(1e-9, wall_active()));
 }
 
 } // namespace
@@ -154,7 +185,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     const fs::path scene = opt.scene.empty() ? root / "scenes/flat_scene.xml" : opt.scene;
-    const fs::path out = opt.out.empty() ? root / "output/cpp/cpp_record.mp4" : opt.out;
+    const fs::path out = opt.out.empty() ? root / "output/cpp/rest_down.mp4" : opt.out;
 
     std::printf("MuJoCo %s\n", mj_versionString());
     if (mjVERSION_HEADER != mj_version()) {
@@ -217,28 +248,47 @@ int main(int argc, char **argv) {
             fs::create_directories(out.parent_path());
             rec = std::make_unique<OffscreenRecorder>(m, out.string(), opt.width, opt.height, opt.fps,
                                                       opt.camera);
-            std::printf("录像：%.0f fps → %s（离屏缓冲 %dx%d → 输出 %dx%d）\n", opt.fps, out.c_str(),
-                        rec->viewport_width(), rec->viewport_height(), opt.width, opt.height);
+            char off[96];
+            if (rec->scaled())
+                std::snprintf(off, sizeof(off), "离屏缓冲 %dx%d → 缩放输出 %dx%d",
+                              rec->viewport_width(), rec->viewport_height(), opt.width, opt.height);
+            else
+                std::snprintf(off, sizeof(off), "离屏缓冲 = 输出 %dx%d", rec->viewport_width(),
+                              rec->viewport_height());
+            std::printf("录像：%.0f fps → %s（%s）\n", opt.fps, rec->path().c_str(), off);
         } else {
             std::printf("只仿真：无窗口无录像，全速跑 %.1f 仿真秒\n", opt.seconds);
         }
 
+        // 只量"仿真循环"本身的墙钟：录像收尾（rec->Close 等 ffmpeg 写 moov）与离屏初始化
+        // 都不该算进"单步耗时"这类数字里（否则录像模式的实时率会被收尾时间稀释）。
+        const auto loop_start = std::chrono::steady_clock::now();
         while (d->time < opt.seconds - 1e-12) {
             mj_step(m, d);
             if (rec)
                 rec->Capture(m, d);
             ++steps;
         }
+        const double loop_ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loop_start)
+                .count();
         if (rec) {
             std::printf("录像：%d 帧 → %s\n", rec->frames(), rec->path().c_str());
             rec->Close(); // 等 ffmpeg 收尾（写完 moov），否则 MP4 播不了
         }
+        std::printf("仿真 %.3f s（%d 步，wall %.1f ms，单步 %.4f ms）\n", d->time, steps.load(), loop_ms,
+                    loop_ms / std::max(1, steps.load()));
     }
 
-    const double wall_ms =
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start).count();
-    std::printf("仿真 %.3f s（%d 步，wall %.1f ms，单步 %.4f ms）\n", d->time, steps.load(), wall_ms,
-                wall_ms / std::max(1, steps.load()));
+    // view 模式的实时率由物理线程自己报（它知道那套活动的墙钟），这里只报 main 的总耗时
+    if (opt.mode == "view") {
+        const double wall_ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start)
+                .count();
+        std::printf("仿真 %.3f s（%d 步）；wall %.1f ms 是 main 的总耗时（含开窗、加载与收尾），"
+                    "实时率看上面物理线程自己报的那行\n",
+                    d->time, steps.load(), wall_ms);
+    }
 
     mj_deleteData(d);
     mj_deleteModel(m);
