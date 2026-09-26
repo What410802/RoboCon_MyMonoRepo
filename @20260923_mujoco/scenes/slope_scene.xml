@@ -1,0 +1,16 @@
+<mujoco model="black_slope_scene">
+  <!-- 斜面 demo（cpp_slope/）用：**只比 flat_scene.xml 多一张地面棋盘格纹理**，物理世界完全一样
+       （同一个 include、同一 option/visual、同一块 type=plane 地面，所以站立指标与 flat_scene 逐位相同）。
+       为什么要多这一张纹理：窗口相机是"重力水平"的，而一块又平、又无限、又没有纹理的地面，从水平
+       相机看过去与"倾斜的地面"在画面上几乎一样（实测见 ../docs/stand.md 的「斜面为什么看不出来」）。
+       有了纹理，坡度一眼可见，而且正好证明相机水平——竖直方向仍竖直，斜的是地面。
+       用法：cpp_slope 默认读这个场景；想回到"纯色地面"就显式传 ../scenes/flat_scene.xml。 -->
+  <include file="flat_scene.xml"/>
+
+  <asset>
+    <!-- builtin=checker 是 MuJoCo 自带的程序化纹理，不需要外部图片 -->
+    <texture name="floor_grid" type="2d" builtin="checker" width="256" height="256"
+             rgb1="0.85 0.85 0.85" rgb2="0.62 0.62 0.64"/>
+    <material name="floor_grid_mat" texture="floor_grid" texrepeat="4 4" rgba="1 1 1 1"/>
+  </asset>
+</mujoco>
