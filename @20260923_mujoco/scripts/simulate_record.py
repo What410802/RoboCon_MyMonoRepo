@@ -11,7 +11,7 @@ scene_path = project_path/"scenes/flat_scene.xml"
 model = mujoco.MjModel.from_xml_path(str(scene_path))
 data = mujoco.MjData(model)
 
-out_path = project_path/"output/simulate_record.mp4"
+out_path = project_path/"output/python/simulate_record.mp4"
 
 # 相比 simulate.py，只多这一层 with（以及循环里的 rec.capture）
 with VideoRecorder(model, out_path, fps=50, camera="iso") as rec:

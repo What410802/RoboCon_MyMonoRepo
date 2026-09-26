@@ -13,12 +13,25 @@
 
 ## 快速开始
 
+环境只有**一个**（本仓库根目录的 `pixi.toml` + `pixi.lock`），装它分两步：先装 `pixi` 本身（单文件包管理器，默认装到 `~/.pixi`，不需要 sudo；官方说明见 <https://pixi.prefix.dev/latest/installation/>），再用它还原环境。
+
 ```bash
-pixi install                                           # 按 pixi.lock 还原环境（Python + MuJoCo + C++ 工具链）
-pixi run python @20260923_mujoco/scripts/simulate.py   # Python 侧：平地场景开窗口跑零力矩仿真
+# ① 装 pixi（装完重开终端或 source 一下 shell 配置以更新 PATH；以后升级用 pixi self-update）
+curl -fsSL https://pixi.sh/install.sh | sh
+
+# ② 在仓库根目录还原环境：Python + MuJoCo（含 C++ 头文件/库/CMake 配置）+ C++ 工具链
+cd <本仓库根目录>            # 有 pixi.toml 的地方
+pixi install
+
+# ③ 验证：版本号，以及 C++ 侧要用的头文件与 CMake 配置都在
+pixi run python -c "import mujoco; print(mujoco.__version__)"                        # 期望 3.12.0
+pixi run bash -lc 'ls "$CONDA_PREFIX/include/mujoco/mujoco.h" "$CONDA_PREFIX/lib/cmake/mujoco"'
+
+# ④ 跑一个例子：平地场景零力矩仿真（开窗口，需显示服务；仓库默认 egl 无窗口）
+pixi run env MUJOCO_GL=glfw python @20260923_mujoco/scripts/simulate.py
 ```
 
-各任务的完整运行方式（脚本参数、C++ 构建与运行、产物位置）见对应任务文档。
+各任务的完整运行方式（脚本参数、C++ 构建与运行、产物位置）见对应任务文档；为什么这么搭环境、踩过哪些坑见 [`docs/pitfalls/environment.md`](docs/pitfalls/environment.md)。
 
 ## 文档索引
 

@@ -4,7 +4,7 @@
 // 循环只按**仿真时间**收尾——没有窗口就没有 viewer.is_running() 可用。
 //
 // 用法：dog_sim [scene.xml] [seconds] [--no-record] [--out FILE] [--fps N] [--width N] [--height N] [--camera NAME]
-//   默认：../scenes/flat_scene.xml、4 仿真秒、50 fps、960x540，录到 ../output/cpp_record.mp4。
+//   默认：../scenes/flat_scene.xml、4 仿真秒、50 fps、960x540，录到 ../output/cpp/cpp_record.mp4。
 
 #include <mujoco/mujoco.h>
 
@@ -25,13 +25,13 @@ namespace {
 const char *kUsage =
     "用法：dog_sim [scene.xml] [seconds] [--no-record] [--out FILE] [--fps N] [--width N] "
     "[--height N] [--camera NAME]\n"
-    "  默认 ../scenes/flat_scene.xml、4 仿真秒、50 fps、960x540，录到 ../output/cpp_record.mp4\n";
+    "  默认 ../scenes/flat_scene.xml、4 仿真秒、50 fps、960x540，录到 ../output/cpp/cpp_record.mp4\n";
 
 struct Options {
     fs::path scene; // 空 = 默认场景
     double seconds = 4.0;
     bool record = true;
-    fs::path out; // 空 = 默认 output/cpp_record.mp4
+    fs::path out;  // 空 = 默认 output/cpp/cpp_record.mp4
     double fps = 50.0;
     int width = 960;
     int height = 540;
@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     const fs::path scene = opt.scene.empty() ? root / "scenes/flat_scene.xml" : opt.scene;
-    const fs::path out = opt.out.empty() ? root / "output/cpp_record.mp4" : opt.out;
+    const fs::path out = opt.out.empty() ? root / "output/cpp/cpp_record.mp4" : opt.out;
 
     std::printf("MuJoCo %s\n", mj_versionString());
     if (mjVERSION_HEADER != mj_version()) {

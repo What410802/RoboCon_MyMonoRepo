@@ -4,6 +4,29 @@
 
 相关文档：MuJoCo 本体知识点与坑点见 [`../learn/mujoco.md`](../learn/mujoco.md)（第 7 节讲 `MUJOCO_GL` 与渲染开销，[§7.6](../learn/mujoco.md#76-这些结论驱动了哪些配置决策) 是"结论 → 配置"的反向索引）； 图形栈背景见 [`../learn/graphics-stack.md`](../learn/graphics-stack.md)；编辑器提示的完整方案见 [`../learn/cmake-intellisense.md`](../learn/cmake-intellisense.md)；项目约定见 [`../conventions.md`](../conventions.md)；文档索引见 [`../../README.md`](../../README.md)。
 
+## 环境怎么搭出来（从零复现）
+
+**安装步骤（装 pixi → `pixi install` → 验证）在仓库根 [`README.md`](../README.md) 的「快速开始」里，不在这里重复。** 本节只记“为什么 / 谁提供”的部分：
+
+- `[dependencies]` 只声明了 5 项：`python=3.12.*`、`mujoco>=3.12.0,<4`、`cxx-compiler`、`cmake`、`ninja`；其余全是它们的依赖自动带进来的。**MuJoCo 的 C++ 头文件、库与 CMake 配置不是我们单独装的**，而是 `mujoco` 这个**元包**（它自己 0 个文件）依赖的 `libmujoco` 提供：`include/mujoco/*.h`、`include/simulate/*.h`、`lib/libmujoco.so`、`lib/libmujoco_simulate.so`、`lib/cmake/mujoco/`；`glfw`、`libgl-devel`、`mujoco-simulate`、`mujoco-samples` 也都是随它进来的。
+
+```bash
+# 各项依赖是谁装的（mujoco 是元包，libmujoco 才真正带头文件）
+python3 - <<'PY'
+import glob, json
+for f in sorted(glob.glob('.pixi/envs/default/conda-meta/*mujoco*.json')):
+    d = json.load(open(f))
+    n = len([x for x in d['files']
+             if x.startswith(('include/mujoco', 'lib/libmujoco', 'lib/cmake/mujoco'))])
+    print(f"{d['name']:16s} {d['version']:8s} 相关文件 {n:3d} 个")
+PY
+
+```
+
+搭环境时踩过的坑（清华镜像 403、镜像不支持 sharded repodata、PyPI 上游达不到 1 MiB/s 所以要保留回退链）见下面各节；任务目录只引用本文，不重复。
+
+**能不能真的从零装全**（2026-09-26 实测）：把仓库 clone 到一个干净目录（新克隆里没有 `.pixi`），只跑 `pixi install`——2 s 就装完（包都在 pixi 本地缓存里，所以没走网络；换一台全新机器会重新下载，耗时见后面镜像一节），随后 `import mujoco` 得到 3.12.0、`include/mujoco/mujoco.h` 与 `lib/libmujoco.so` 都在，Python 侧 `scripts/agent_scripts/rest_check.py` 与 C++ 侧 `cpp_task2`（cmake + ninja 编译后运行）都直接跑通且结论一致（8 s 后末 1 s 漂移 4.440e-10 m、判“静止趴住”）。
+
 ## 工具链选择： Pixi = Conda + uv
 
 好处：**Python、MuJoCo（C 库 + Python 绑定）与 C++ 工具链都装在同一个 pixi 环境里**，不用系统 apt 包，也不用单独的 venv。
@@ -98,8 +121,9 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 
 详见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)，这里只记最容易再踩的几条：
 
-1. **MuJoCo 自带转换会把根 link 并进 `worldbody`**。`mj_saveLastXML()` / `MjSpec.from_file().to_xml()`读 URDF 得到的结果里，`trunk` 不再是 body ⇒ **没有 `<freejoint/>`，而且基座质量惯量整块丢失**（本模型 13.2472 → 7.47 kg，差值 5.7772 kg 正好是 trunk+imu_link+d435_link）。它还只导 URDF 的 `<collision>`，visual mesh 全部丢弃。
-2. **urdf.enkeebot.com 的「Include Skeleton」版没有碰撞体**：19 个 geom 全是`contype=0 conaffinity=0`，用它做“趴在地上”会直接穿过地面。正确组合是**Floating Base 开 + Actuator Type = Torque + Include Skeleton 关**。
+1. **MuJoCo 自带转换会把根 link 并进 `worldbody`**：没有 `<freejoint/>`，基座的质量惯量也整块丢失（本模型 13.2472 → 7.47 kg），而且只导 `<collision>`、visual mesh 全丢。
+2. **urdf.enkeebot.com 的「Include Skeleton」版没有碰撞体**（全部 geom `contype=0 conaffinity=0`），拿它做“趴在地上”会直接穿过地面。
+   上面两条的症状、数字与选项组合见 [`../../@20260923_mujoco/docs/model.md`](../../@20260923_mujoco/docs/model.md)（本任务文档），这里只留结论。
 3. **同一份 mesh 被复制了 3 份**（原始 URDF、网站导出、旧导出），每份 34 MB 且 md5 完全相同。处理：模型用 `meshdir` 指向 `assets/urdf/meshes` 这一份，其余在 `.gitignore` 里排除。
 4. **`.gitignore` 对已经 `git add` 过的文件无效**。重复的 meshes 与已删除的旧 skeleton 仍然留在索引里，必须 `git rm -r --cached <path>` 才能真正排除（磁盘文件不受影响）。
 5. **导出模型的默认位形穿模**。urdf.enkeebot.com 把根 body 放在原点，而零位形下脚底在基座下方约 0.58 m ⇒ 任何“建完 `MjData` 直接 `mj_step`”的脚本都会看到求解器把狗弹到空中（场景里的 `<keyframe>` 不会被自动加载）。两条修法：把模型基座默认高度抬到“脚底刚好触地”（推荐，模型自洽），或在脚本里`mj_resetDataKeyframe(model, data, 0)` / 显式设 `data.qpos[2]`。

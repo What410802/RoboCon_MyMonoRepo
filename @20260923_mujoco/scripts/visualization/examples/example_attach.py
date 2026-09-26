@@ -37,7 +37,7 @@
 （离线录制没必要等墙钟，跑满 CPU 更快；想保持实时就把那两行加回来，注释里有）。
 
 用法：
-    # 直接当“录一段”用：默认平地上零力矩跑 4 s，结果落在本目录的 output/ 下
+    # 直接当“录一段”用：默认平地上零力矩跑 4 s，结果落在 output/python/ 下
     pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py
     pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py --seconds 5 --camera side
     pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py --start rest --follow trunk
@@ -73,8 +73,8 @@ def main() -> int:
     parser.add_argument("--follow", default=None, help="相机跟随的 body，如 trunk")
     parser.add_argument("--start", choices=("default", "rest"), default="default",
                         help="起飞状态：default=模型原样（和 simulate.py 一样，会自然趴下），rest=趴卧 keyframe")
-    parser.add_argument("--out", type=pathlib.Path, default=HERE / "output/example_attach.mp4",
-                        help="默认写到本目录的 output/ 下（库会自动建目录）")
+    parser.add_argument("--out", type=pathlib.Path, default=ROOT / "output/python/example_attach.mp4",
+                        help="默认写到 output/python/ 下（库会自动建目录）")
     parser.add_argument("--width", type=int, default=960)
     parser.add_argument("--height", type=int, default=540)
     args = parser.parse_args()

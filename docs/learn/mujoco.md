@@ -251,14 +251,7 @@ mjtNum  o_friction[5];   // friction
 
 ### 6.2 网站导出的模型「默认位形就穿模」，求解器会把狗弹飞
 
-`urdf.enkeebot.com` 把根 body 放在原点，而零位形下脚底在基座下方 0.5786 m ⇒ 默认状态整只 狗沉进地面。**实测 A/B**（同一平地场景、默认位形、`ctrl=0`、2 s）：
-
-| 场景 | 初始脚底 z | 初始基座 z | 2 s 内最高基座 z | 2 s 内最高 \|qvel\| |
-|---|---|---|---|---|
-| 原始导出（`trunk pos="0 0 0"`） | **-0.5786** | 0.0000 | **4.0444**（弹到 4 m 高） | **49.36** |
-| 打过补丁（基座抬到触地高度） | -0.0000 | 0.5786 | 0.5786（没升高） | 15.86 |
-
-修法：把基座默认高度抬到「脚底刚好触地」；或在脚本里 `mj_resetDataKeyframe(model, data, 0)` / 显式设 `data.qpos[2]`。
+`urdf.enkeebot.com` 把根 body 放在原点，而零位形下脚底在基座下方 0.5786 m ⇒ 默认状态整只 狗沉进地面。**症状与修法**：不修的话，第一步就会看到狗被弹到几米高（本任务的实测数字与 A/B 脚本见 [`../../@20260923_mujoco/docs/task2.md`](../../@20260923_mujoco/docs/task2.md)）。修法：把基座默认高度抬到「脚底刚好触地」；或在脚本里 `mj_resetDataKeyframe(model, data, 0)` / 显式设 `data.qpos[2]`。
 注意**场景里的 `<keyframe>` 不会自动加载**，最简 `viewer.launch_passive` 循环就会踩到。
 
 **“脚底刚好触地”的高度怎么求**（本模型足底是球体，所以有闭式解）：`mj_forward()` 之后遍历足底 geom，
@@ -273,11 +266,11 @@ mjtNum  o_friction[5];   // friction
 
 ### 6.4 MuJoCo **没有**原生录像功能
 
-官方 `simulate` GUI 只能存单帧截图；Python 侧 `mujoco.Renderer` 只返回 RGB 帧数组， 编码要自己接（本仓库用离屏渲染 + 管道给系统 ffmpeg：库在 `scripts/visualization/mujoco_video.py`，开箱即用的命令行入口是 `scripts/visualization/examples/example_attach.py`）。
+官方 `simulate` GUI 只能存单帧截图；Python 侧 `mujoco.Renderer` 只返回 RGB 帧数组， 编码要自己接（本仓库的做法是离屏渲染 + 管道给系统 ffmpeg，Python 与 C++ 各一份，用法与参数见 [`../../@20260923_mujoco/docs/recording.md`](../../@20260923_mujoco/docs/recording.md)）。
 
-### 6.5 MuJoCo 的 URDF→MJCF 转换与网站导出差异很大（本任务选后者）
+### 6.5 URDF→MJCF 有两条路线，产物差别很大
 
-`mj_saveLastXML()` 与 `MjSpec.from_file().to_xml()` 都能转（两者输出**逐字节相同**，已用 `cmp` 验证），但：只导 `<collision>`、**visual mesh 全丢**、**根 link 被并进 `worldbody`** （于是没有 `<freejoint/>`，还丢掉基座质量惯量：本模型 13.2472 → 7.47 kg）、没有 actuator。 详见任务 README 的三方对比表。
+MuJoCo 自带的 `mj_saveLastXML()` / `MjSpec.from_file().to_xml()` 都能转（两者输出**逐字节相同**），但产物与网站（urdf.enkeebot.com）导出不同：只导 `<collision>`、**visual mesh 全丢**、**根 link 被并进 `worldbody`**（于是没有 `<freejoint/>`，还丢掉基座质量惯量）、没有 actuator。具体差异、选项组合与本任务的选择见 [`../../@20260923_mujoco/docs/model.md`](../../@20260923_mujoco/docs/model.md)。
 
 ### 6.6 离屏渲染尺寸受模型 XML 限制（默认只有 640×480）
 

@@ -104,8 +104,8 @@ def main() -> int:
     parser.add_argument("--height", type=int, default=540)
     parser.add_argument("--pacing", choices=("deadline", "naive"), default="deadline",
                         help="实时节流方式：deadline=按目标墙钟时刻自我纠偏（推荐）；naive=只补本步亏欠")
-    parser.add_argument("--out", type=pathlib.Path, default=HERE / "output/record_with_viewer.mp4",
-                        help="默认写到本目录的 output/ 下（库会自动建目录）")
+    parser.add_argument("--out", type=pathlib.Path, default=ROOT / "output/python/record_with_viewer.mp4",
+                        help="默认写到 output/python/ 下（库会自动建目录）")
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(args.scene))

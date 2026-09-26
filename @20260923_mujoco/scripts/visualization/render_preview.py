@@ -8,7 +8,7 @@
 PNG 直接用标准库 zlib 手写，避免为一个截图引入 pillow/imageio 依赖。
 
 用法：
-    pixi run python scripts/render_preview.py [--camera front|side|iso] [--out output/preview_<camera>.png]
+    pixi run python scripts/render_preview.py [--camera front|side|iso] [--out output/python/preview_<camera>.png]
 """
 
 from __future__ import annotations
@@ -56,11 +56,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--camera", choices=sorted(CAMERAS), default="iso")
     parser.add_argument("--out", type=pathlib.Path, default=None,
-                        help="默认 output/preview_<camera>.png")
+                        help="默认 output/python/preview_<camera>.png")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     args = parser.parse_args()
-    out = args.out or (ROOT / f"output/preview_{args.camera}.png")
+    out = args.out or (ROOT / f"output/python/preview_{args.camera}.png")
 
     model = mujoco.MjModel.from_xml_path(str(SCENE))
     data = mujoco.MjData(model)
