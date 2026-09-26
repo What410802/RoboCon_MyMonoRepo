@@ -41,7 +41,7 @@ pixi run env MUJOCO_GL=glfw python @20260923_mujoco/scripts/simulate.py
 
 | 文档 | 内容 |
 |---|---|
-| [`mujoco.md`](docs/learn/mujoco.md) | MuJoCo 知识点与坑点：`MjModel` / `MjData`、`geom` / `friction` / `condim`、渲染后端（§7）、决策反向索引（[§7.6](docs/learn/mujoco.md#76-这些结论驱动了哪些配置决策)）、复现命令（§8） |
+| [`mujoco.md`](docs/learn/mujoco.md) | MuJoCo 知识点与坑点：`MjModel` / `MjData`、`geom` / `friction` / `condim`、坑点里含「运行时改 `geom_pos`/`geom_quat` 会被 `geom_sameframe` 吃掉」（§6.7）与「相机不会跟地面转 / 地面斜了画面却看不出」（§6.8）、渲染后端（§7）、决策反向索引（[§7.6](docs/learn/mujoco.md#76-这些结论驱动了哪些配置决策)）、复现命令（§8） |
 | [`graphics-stack.md`](docs/learn/graphics-stack.md) | 图形 / 渲染 / 视频栈速查（OpenGL、Skia、DirectX、EGL、GLFW 各在哪一层） |
 | [`unitree-mujoco.md`](docs/learn/unitree-mujoco.md) | 上游 `unitree_mujoco` 研读笔记：架构、线程、通信与目标设计 |
 | [`runtime-timing.md`](docs/learn/runtime-timing.md) | 同上，展开到进程 / 线程 / 通信的时序细节；§11 是五种方案的每帧阻滞对比 |

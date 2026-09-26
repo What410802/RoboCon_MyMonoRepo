@@ -129,6 +129,8 @@ print(data.warning)   # 7 个条目，各有 lastinfo（最近一次的 id）与
 
 两个小坑：每步「先 `forward` 再 `step`」是重复计算；`mj_step` 之后 `data.time` 已经前进了， 用 `while data.time < T` 做循环条件时不用自己加时间。
 
+**改字段还要分清「引擎什么时候读它」**：`opt.gravity`、`geom_friction`、`geom_matid` 这类是每步/每帧现读的，加载后改了立刻生效（实测：运行时换掉地面的 `geom_matid` 就能把纹理换掉）；但**位姿类**的 `geom_pos`/`geom_quat` 会被编译期定下的 `geom_sameframe` 挡住——同一个 geom 上「改了没反应」与「改了生效」都可能，见 §6.7。
+
 ### 1.5 广义坐标 vs 广义速度：`nq` 与 `nv` 为什么会不一样
 
 **会，而且只要模型里有「四元数关节」就一定会不一样。** 实测各关节类型的贡献：
@@ -285,6 +287,27 @@ or specify a larger offscreen framebuffer in the model XML ...
 
 **做法**：两种都行——(a) 在 XML 里声明够大的 `offwidth/offheight`；(b) 加载后改 `model.vis.global_.offwidth/offheight` 再建 `Renderer`（**录像库 `VideoRecorder` 就是自动这么做的**，所以任意场景都能按你给的 `width/height` 录）。注意改必须在 `Renderer(...)` 构造**之前**。
 
+C++ 侧同一条规则：`cpp_task2/src/record.h` 的 `OffscreenRecorder` 也在 `mjr_makeContext` **之前**把 `m->vis.global.offwidth/offheight` 设成 `--width/--height`，所以录像现在是**原生**跑在输出分辨率上、不再从场景声明的 1280×720 放大（放大版会糊）。实测 960×540 / 1920×1080 / 3840×2160 三档：`mjr_maxViewport` 返回的视口与输出尺寸逐项一致（`ffprobe` 实测分辨率也对），`ffmpeg -vf` 里只剩 `vflip`。
+
+### 6.7 运行时改 `geom_pos` / `geom_quat` 可能**静默无效**：`geom_sameframe`
+
+把地面转个角度、把障碍物挪个位置，直觉写法是加载后直接写 `m->geom_quat[...]` / `m->geom_pos[...]`。**实测（MuJoCo 3.12）这样会静默失效**：模型里字段读回来确实是新值，但 `d->geom_xpos` / `d->geom_xmat` 一点不变，碰撞面也不动——把地面转 15° 后，放在 `x=1` 的自由小球跑 2 s 仍停在原地（落点 `x=1.000`、`z=0.050`），地面 geom 的实测法向仍是 `(0, 0, 1)`。
+
+原因在运动学：`mj_kinematics2` 算 geom 世界位姿时调 `mj_local2Global(d, d->geom_xpos+3*g, d->geom_xmat+9*g, m->geom_pos+3*g, m->geom_quat+4*g, m->geom_bodyid[g], m->geom_sameframe[g])`（`src/engine/engine_core_smooth.c:214`），而 `mj_local2Global`（同文件 `:975`）在 `sameframe` 为 `mjSAMEFRAME_BODY` 时**直接抄它所属 body 的位姿**（位置分支就是一句 `mji_copy3(xpos, d->xpos+3*body)`），根本不看传进去的 `pos`/`quat`。`geom_sameframe` 是**编译期**推断的：geom 的 `pos` 为零、`quat` 为单位四元数（也就是「与 body 同帧」）时被标成 `mjSAMEFRAME_BODY`（枚举见 `mjtSameFrame`，`mjtype.h:457`）；场景里不写 `pos/quat` 的地面（`<geom name="floor" type="plane" .../>`）正是这样，实测它的 `geom_sameframe=1`。
+
+**做法**：改 `geom_pos`/`geom_quat` 的同时把 `m->geom_sameframe[g] = 0` 清掉（一行）。**实测**：只改 quat → 小球落点 `x=1.000`、法向 `(0, 0, 1)`；quat + 清 sameframe → 法向变成 `(0.259, 0, 0.966)`、小球沿坡滚到 `x=4.303`。不想在运行时改也行：走 `mj_parseXML` → 改 `mjsGeom` → `mj_compile` 把姿态烘进编译期（`mjSpec` 系列是 3.2+ 的公开 API），或者干脆写在 XML 里。
+
+**配套习惯**：这类「自己算的几何 ≠ 引擎真正用的几何」不会报任何错，只会让结论整段错。凡是自己维护「地面法向 / 平面上一点」这类派生量的地方，都在改完 + `mj_forward` 之后断言一次 `d->geom_xmat` 的第三列（世界系法向）与自己的期望一致，不一致就报错退出。
+
+### 6.8 「地面斜了，画面却看不出」：先查地面到底转没转，再谈相机
+
+**现象**：把地面倾斜 15° 后，窗口里地面看起来仍与画面底边平行（像根本没转），自然会怀疑「相机跟着地面一起转了」。**两个结论都实测过**：
+
+- **相机不可能跟着转**：自由相机的 up 由世界 z 构造（`mjv_updateCamera`），`up` 与世界 z 的夹角就等于 `elevation`（本次场景 `<visual><global azimuth="120" elevation="-20"/>` ⇒ `up=(-0.171, 0.296, 0.940)`、`up·z=0.93969=cos 20°`）；`mjvCamera` 里根本没有 roll 字段。实测 pitch 0° 与 15° 两次算出的相机 `pos/forward/up` **逐位相同**。
+- **真正的原因是地面压根没转**：那种写法被 §6.7 的 `geom_sameframe` 吃掉了。实测同一次比较里，`d->geom_xmat` 显示地面法向仍是 `(0, 0, 1)`，画面与水平地面基准的**下部条带**（该区域只有地面）几乎逐像素相同（平均 |ΔRGB| = **1.98**，上限 765）；清掉 `sameframe` 后同一个比较变成 **185.73**——画面立刻就变了。所以「看起来像没转」是字面意义上的「真的没转」，不是视角问题。
+
+**做法**：先用 §6.7 的办法确认地面转成了（断言 `d->geom_xmat`），再看画面。顺带一条：纯色地面即使真转了，画面里也只有亮度/边界的变化，看不出「斜多少、往哪斜」；要一眼看清坡度就给地面加**可见参照**——本次用的是 MuJoCo 自带的程序化纹理（`<texture type="2d" builtin="checker"/>` + `<material texture="..."/>`，不需要外部图片；地面仍是 `type="plane"`，物理一点没变），斜面 demo 的默认场景 `@20260923_mujoco/scenes/slope_scene.xml` 就是「flat_scene + 一张棋盘格材质」。
+
 ---
 
 ## 7. 渲染后端（`MUJOCO_GL`）与开销
@@ -390,7 +413,7 @@ MUJOCO_GL=glfw pixi run python xxx.py         # 无效（被 activation.env 覆�
 
 **上限在哪？**
 
-* MuJoCo **自己**只有一条要求：模型里声明的离屏 buffer 必须 ≥ 请求尺寸 （`<visual><global offwidth/offheight>`，默认 640×480；录像库 `VideoRecorder` 会自动调大， 见 §6.6）；
+* MuJoCo **自己**只有一条要求：模型里声明的离屏 buffer 必须 ≥ 请求尺寸 （`<visual><global offwidth/offheight>`，默认 640×480；录像库 `VideoRecorder` 会自动调大， 见 §6.6；C++ 的 `OffscreenRecorder` 同样会把它调到请求尺寸）；
 * 真正的天花板是 **GL / 驱动 / 显存**：本机 `egl`(NVIDIA) `GL_MAX_TEXTURE_SIZE = 32768`、 `glfw`(Intel) 只有 16384。实测 8192×8192 能跑（**192 MiB/帧**，一帧 3.6 s —— 瓶颈已经是回读带宽）， 40960×40960 直接报 `FatalError: Offscreen framebuffer is not complete, error 0x8cd6`（FBO 不完整）。
 
 所以"分辨率上限" = **min(GL/显存上限, 你能接受的带宽)**，不是 MuJoCo 设的。
@@ -433,7 +456,7 @@ update_scene → render()（GPU 画进离屏 FBO）→ tobytes()
 
 1. 调用频率要够：**每个 `1/fps` 的仿真区间内至少调一次 `capture()`**（最省心的做法是每步都调，
    反正内部会节流）；
-2. `fps ≤ 1/timestep`：一个步长只能采一帧，本模型 `timestep=0.002` ⇒ 上限 500 fps，
+2. `fps ≤ 1/timestep`：一个步长只能采一帧，本模型 `timestep=0.002` ⇒ 上限 500 fps（C++ 侧 `record.h` 同一条限制），
    想更高只能减小 `timestep`。
 
 ### 7.6 这些结论驱动了哪些配置决策
@@ -445,6 +468,7 @@ update_scene → render()（GPU 画进离屏 FBO）→ tobytes()
 | 全局 `MUJOCO_GL = "egl"` | `pixi.toml` 的 `[activation.env]` | §7.1（必须在 import 之前生效）+ §7.2（egl 不依赖显示服务，且在双显卡机器上落到更合适的那块 GPU）|
 | 库里再 `setdefault("MUJOCO_GL", "egl")` 兜底 | `visualization/mujoco_video.py` | §7.1（不依赖调用方的 import 顺序）|
 | 建 `Renderer` 前自动调大 `model.vis.global_.offwidth/offheight` | `visualization/mujoco_video.py` | §6.6 / §7.3（默认离屏只有 640×480，否则直接报错）|
+| 同上（C++）：建 context 前调大 `m->vis.global.off*`，尺寸一致就不加 `scale`；输出路径打印成绝对路径 | `cpp_task2/src/record.h` | §6.6（同一规则，两边都能按 `--width/--height` 原生录）|
 | 提供 `--width/--height`（分辨率与视角解耦）| `example_attach.py`、`example_with_viewer.py`、`render_preview.py` | §7.3 |
 | 开窗口时 `viewer.sync()` 默认每 25 步一次（`--sync-every`）| `example_with_viewer.py` | §7.2（每步 sync 会被显示刷新钉住）|
 | 开窗口时建议把录像降到 10 fps | `example_with_viewer.py` docstring | §7.2（渲染是链路大头，50 fps + 窗口跟不上实时）|
@@ -466,6 +490,9 @@ cd ~/BiS.d/Code.d/RoboCon/MyMonoRepo.d
 
 # geom type / friction / condim 的全部实测数据
 pixi run python @20260923_mujoco/scripts/agent_scripts/mujoco_facts.py
+
+# 第 6.7/6.8 节：运行时改地面 geom_quat 会被 geom_sameframe 吃掉；相机不会跟地面转（需要离屏渲染）
+pixi run python @20260923_mujoco/scripts/agent_scripts/geom_sameframe_check.py --pitch 15
 
 # 原始导出 vs 打过补丁模型的初始状态 A/B
 pixi run python @20260923_mujoco/scripts/agent_scripts/ab_initial_state.py

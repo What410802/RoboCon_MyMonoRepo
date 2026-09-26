@@ -30,7 +30,7 @@
 - 任务目录用 `@<日期>_<主题>`（当前：`@20260922_robot_cpp_training`、`@20260923_mujoco`）；这与验收规范建议的 `01_/02_…` 序号方式等价，映射关系见根 [`README.md`](../README.md) 的「任务记录」。
 - 目录与文件命名**统一用下划线**（如 `agent_scripts`、`onetime_tools`），不用连字符。
 - **C/C++ 与 CMake 缩进统一用 4 空格**（不用 Tab、不用 2 空格）：根目录放了 `.clang-format`（`IndentWidth: 4`、`ColumnLimit: 0` 即不自动折行），格式化直接 `clang-format -i <file>`。
-- 按**语言**分目录：语言无关的资源（`assets/`、`models/`、`scenes/`）放任务根目录；产物放 `output/<语言>/`（如 `output/python/`、`output/cpp/`，默认路径写在产出脚本里）；仿真与可视化代码放 `python/`；C++ 工程放 `cpp/`；诊断脚本与一次性工具留在 `scripts/`。
+- 按**语言**分目录：语言无关的资源（`assets/`、`models/`、`scenes/`）放任务根目录；产物放 `output/<语言>/`（如 `output/python/`、`output/cpp/`，默认路径写在产出脚本里；命名**结果导向、两侧同名**——`<状态>_<动作>` 如 `rest_down`（趴卧）/`stand_up`（起身）/`slope_stand`（斜面站住），分辨率或帧率另加后缀如 `_1080p120fps`，C++ 与 Python 同一件事用同一个名字）；仿真与可视化代码放 `python/`；C++ 工程放 `cpp/`；诊断脚本与一次性工具留在 `scripts/`。
 - 构建产物、缓存、大二进制不入库（验收规范 §4.4）：`.gitignore` 覆盖 `build/`、`.cache/`、`__pycache__/`、`.pixi/` 等；重复的大资源用软链接共用一份真实文件。
 
 ## 4. 环境与依赖

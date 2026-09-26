@@ -6,7 +6,7 @@
 
 ## 环境怎么搭出来（从零复现）
 
-**安装步骤（装 pixi → `pixi install` → 验证）在仓库根 [`README.md`](../README.md) 的「快速开始」里，不在这里重复。** 本节只记“为什么 / 谁提供”的部分：
+**安装步骤（装 pixi → `pixi install` → 验证）在仓库根 [`README.md`](../../README.md) 的「快速开始」里，不在这里重复。** 本节只记“为什么 / 谁提供”的部分：
 
 - `[dependencies]` 只声明了 5 项：`python=3.12.*`、`mujoco>=3.12.0,<4`、`cxx-compiler`、`cmake`、`ninja`；其余全是它们的依赖自动带进来的。**MuJoCo 的 C++ 头文件、库与 CMake 配置不是我们单独装的**，而是 `mujoco` 这个**元包**（它自己 0 个文件）依赖的 `libmujoco` 提供：`include/mujoco/*.h`、`include/simulate/*.h`、`lib/libmujoco.so`、`lib/libmujoco_simulate.so`、`lib/cmake/mujoco/`；`glfw`、`libgl-devel`、`mujoco-simulate`、`mujoco-samples` 也都是随它进来的。
 
@@ -144,7 +144,8 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 - 仓库把 `MUJOCO_GL=egl` 写进 `pixi.toml` 的 `[activation.env]`，对所有脚本生效； 临时换后端要 `pixi run env MUJOCO_GL=glfw python …`（命令行前缀会被激活环境覆盖）。
 - 本机显卡算力（Pascal sm_61 + 驱动 580）**不够跑 MJX / MJWarp**，所以只用 CPU 仿真。
 - 本机特有的小现象：开窗口的进程退出时偶发 `segmentation fault` 或 `GLFWError: EGL: Failed to clear current context`（MP4 在崩溃前已写完，产物不受影响）； Wayland/XWayland 会把 GLFW 的窗口位置警告打到 stderr。
-- **离屏渲染的帧尺寸不等于请求的窗口尺寸**：本机显示缩放（GNOME 分数缩放）会让 `glfwCreateWindow(960, 540)` 拿到 **1280×720** 的 framebuffer——实测请求 960×540 与 320×180 拿到的都是 1280×720。所以自己起 GL 上下文做离屏录像时（`cpp_task2/src/record.h`），必须用 `mjr_maxViewport()` 的**实际**视口告诉 ffmpeg 每帧多少字节，再 `scale` 到目标尺寸；若按请求尺寸写，帧就对不齐（现象：写进 191 帧的 raw 流被 ffmpeg 读成 339 帧、时长 6.78 s）。
+- **离屏渲染的帧尺寸由模型的 `<visual><global offwidth/offheight>` 决定，不是请求尺寸，也不是窗口尺寸**（默认 640×480；本任务场景声明的是 1280×720）。以前 `cpp_task2/src/record.h` 没动这两个字段，于是离屏 buffer 一直是场景声明的 1280×720，再把 1280×720 的帧按请求的 960×540 喂给 ffmpeg，帧就错位（现象：写进 191 帧的 raw 流被 ffmpeg 读成 339 帧、时长 6.78 s）。现在 recorder 在 `mjr_makeContext` **之前**把 `offwidth/offheight` 设成输出尺寸（Python 侧 `VideoRecorder` 一直这么做），实测 960×540 / 1920×1080 / 3840×2160 三档的视口与输出尺寸逐项一致、ffprobe 实测分辨率也对得上，`vflip` 后面不再需要 `scale`；只有驱动把视口夹小时才回退到"按实际视口读 + scale 到输出"（`mjr_maxViewport` 仍是每帧字节数的唯一依据）。
+- **录像链路的开销量级**（`cpp_slope --mode record --pitch 15 --seconds 5`，251 帧 / 5 仿真秒，`egl`→MX350）：960×540 → 9.8–13.3 s（39–53 ms/帧）、1920×1080 → 17.8–19.8 s（71–79 ms/帧）、3840×2160 → 50.8 s（202 ms/帧）。三个数都受**机器负载**影响（测时负载均值 ~8，同一命令重复跑能差 30%），量级参考就行。录像**不是实时的**，但这不影响产物：MP4 的时间轴按**仿真时间**走，与机器快慢无关，分辨率越高只是录得越慢。
 - 这些结论**驱动了哪些配置**（反向索引）：见 [`../learn/mujoco.md` 第 7.6 节](../learn/mujoco.md#76-这些结论驱动了哪些配置决策)。
 
 ## 2026-09-25 C++ 工具链（pixi 提供）与编辑器提示

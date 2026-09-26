@@ -401,6 +401,8 @@ sequenceDiagram
 
 **不走这把锁**的：跨线程消息用原子量（`exitrequest` / `droploadrequest` / `uiloadrequest` / `screenshotrequest`…）；播放控制字段（`run` / `real_time_index` / `measured_slowdown` / `busywait`）官方 `PhysicsLoop` 在锁内读，我们那个精简版在锁外读——`int`/`float` 的良性竞态，够用。
 
+`measured_slowdown` 是给界面看的**实测**倍率，官方定义是「墙钟 / 仿真」：官方 `PhysicsLoop` 每轮刷新时写 `sim.measured_slowdown = elapsedCPU / elapsedSim`（`simulate/main.cc:425-431`），界面再算 `actualRealtime = 100 / measured_slowdown`，与下拉框的目标值比对、偏差超 10% 就告警（`simulate/simulate.cc:2881-2885`）。**自己写物理循环时往里写实测值**；把目标值（`percentRealTime[i]/100`）塞进去，界面就会永远显示"已对齐"，机器跟不上、中途调速都不会告警（这个错犯过，见 [`../../@20260923_mujoco/docs/stand.md`](../../@20260923_mujoco/docs/stand.md) 踩坑 9）。
+
 三个方案的那把锁，对比起来差别一眼可见：
 
 | 方案 | 锁保护什么 | 绘制在不在锁里 |
@@ -559,7 +561,7 @@ sequenceDiagram
 |---|---|
 | `mj_step` 0.0432 ms/步，⑤ 的 23.1 ms/圈与 0.089x | 一次性探针：`mj_step` 2000 次计时 + `launch_passive` 下 50 圈 `step+sync` 计时（本机 i5-1035G1、960×540、`MUJOCO_GL=glfw`） |
 | ② 的 0.542x、④ 的 0.998x | `pixi run python @20260923_mujoco/scripts/agent_scripts/physics_pacing.py`（用例 2/3，渲染开销设 20 ms） |
-| ③ 的 1.00x | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim <scene> 1 --mode view`，看它打印的 `wall` |
+| ③ 的 1.00x | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim <scene> 1 --mode view`，看它打印的 `wall`；在界面里暂停一下也照样准——报告用的是独立的一套"活动墙钟"（不含暂停、也不受节流重对齐影响），见 [`../../@20260923_mujoco/docs/stand.md`](../../@20260923_mujoco/docs/stand.md) 踩坑 9 |
 | ① 的锁范围 | 上游 `simulate/src/main.cc`：`PhysicsLoop` 的 `sim.mtx` 包住 step 批次；官方 `simulate.cc`：`RenderLoop` 里 `// MutexLock (unblocks simulation thread)` |
 | ② 的锁范围 | 上游 `simulate_python/unitree_mujoco.py:69-75`（`locker.acquire(); viewer.sync(); locker.release()`）与 `:37-67`（`locker` 包住 `mj_step`）、`config.py:13`（`SIMULATE_DT` 的注释） |
 

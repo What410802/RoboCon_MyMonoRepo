@@ -37,8 +37,8 @@ C++ 侧同一判据（`../cpp_task2/`）：`rest_check` 跑 8 s → 末 1 s 漂�
 
 | 产物 | 产出命令 |
 |---|---|
-| `output/python/simulate_record.mp4` | `pixi run python @20260923_mujoco/scripts/simulate_record.py`（无窗口、50 fps、4.0 s） |
-| `output/python/example_attach.mp4` | `pixi run python @20260923_mujoco/scripts/visualization/examples/example_attach.py`（把录像接进一个“已有”循环） |
-| `output/python/record_with_viewer.mp4` | `pixi run python @20260923_mujoco/scripts/visualization/examples/example_with_viewer.py`（一边开窗口一边录；10 fps，否则跟不上实时） |
-| `output/python/preview_iso.png`、`output/python/preview_side.png` | `pixi run python @20260923_mujoco/scripts/visualization/render_preview.py [--camera iso\|side]` |
-| `output/cpp/cpp_record.mp4` | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim --mode record`（C++ 离屏渲染 → ffmpeg；4 仿真秒、50 fps、**191 帧 / 3.82 s / 960×540**，画面为全程趴卧） |
+| `output/python/rest_down.mp4` | `pixi run python @20260923_mujoco/scripts/simulate_record.py`（无窗口、50 fps、4 仿真秒，实测 201 帧 / 4.02 s） |
+| `output/python/rest_preview_iso.png`、`output/python/rest_preview_side.png` | `pixi run python @20260923_mujoco/scripts/visualization/render_preview.py [--camera iso\|side]`（默认截的就是 `rest` keyframe 的趴卧姿态，1280×720） |
+| `output/cpp/rest_down.mp4` | `pixi run @20260923_mujoco/cpp_task2/build/dog_sim --mode record`（C++ 离屏渲染 → ffmpeg；4 仿真秒、50 fps、实测 **201 帧 / 4.02 s / 960×540**，画面为全程趴卧） |
+
+命名是**结果导向、两侧同名**：C++ 侧与 Python 侧同一件事的产物用同一个名字（`rest_down` / `rest_preview_*`），产出脚本里的默认路径就写这些名字。两个 example 脚本（`examples/example_attach.py`、`examples/example_with_viewer.py`）仍然能跑，但前者的产物与 `rest_down.mp4` **逐字节相同**（同一个循环形状、同一个模型），后者只是“一边开窗一边录”的演示，所以两者的产物都没有留进仓库——要它们自己跑一遍即可。
