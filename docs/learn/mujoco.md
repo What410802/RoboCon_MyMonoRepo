@@ -258,7 +258,14 @@ mjtNum  o_friction[5];   // friction
 | 原始导出（`trunk pos="0 0 0"`） | **-0.5786** | 0.0000 | **4.0444**（弹到 4 m 高） | **49.36** |
 | 打过补丁（基座抬到触地高度） | -0.0000 | 0.5786 | 0.5786（没升高） | 15.86 |
 
-修法：把基座默认高度抬到「脚底刚好触地」；或在脚本里 `mj_resetDataKeyframe(model, data, 0)` / 显式设 `data.qpos[2]`。 注意**场景里的 `<keyframe>` 不会自动加载**，最简 `viewer.launch_passive` 循环就会踩到。
+修法：把基座默认高度抬到「脚底刚好触地」；或在脚本里 `mj_resetDataKeyframe(model, data, 0)` / 显式设 `data.qpos[2]`。
+注意**场景里的 `<keyframe>` 不会自动加载**，最简 `viewer.launch_passive` 循环就会踩到。
+
+**“脚底刚好触地”的高度怎么求**（本模型足底是球体，所以有闭式解）：`mj_forward()` 之后遍历足底 geom，
+取 `基座高度 = -min(球心世界坐标 z − size[0])`，即“基座到最低足底点的距离”；把基座默认 z 设成它即可。
+两个脚本用的都是这条思路：`scripts/onetime_tools/measure_and_fix_base_height.py`（算出后写回 XML）与
+`scripts/agent_scripts/rest_check.py --mode drop`（用同一条算式反算基座高度，再自由落体求趴卧姿态）。
+足型不是球体时，改用 `mj_ray` 向下打射线，或对 geom 的顶点/包围盒求最小值。
 
 ### 6.3 同一份 mesh 被复制三份
 
@@ -268,7 +275,7 @@ mjtNum  o_friction[5];   // friction
 
 官方 `simulate` GUI 只能存单帧截图；Python 侧 `mujoco.Renderer` 只返回 RGB 帧数组， 编码要自己接（本仓库用离屏渲染 + 管道给系统 ffmpeg：库在 `scripts/visualization/mujoco_video.py`，开箱即用的命令行入口是 `scripts/visualization/examples/example_attach.py`）。
 
-### 6.5 MuJoCo 自带的 URDF→MJCF 会「丢东西」
+### 6.5 MuJoCo 的 URDF→MJCF 转换与网站导出差异很大（本任务选后者）
 
 `mj_saveLastXML()` 与 `MjSpec.from_file().to_xml()` 都能转（两者输出**逐字节相同**，已用 `cmp` 验证），但：只导 `<collision>`、**visual mesh 全丢**、**根 link 被并进 `worldbody`** （于是没有 `<freejoint/>`，还丢掉基座质量惯量：本模型 13.2472 → 7.47 kg）、没有 actuator。 详见任务 README 的三方对比表。
 

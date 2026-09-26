@@ -368,6 +368,6 @@ sequenceDiagram
 
 上面这些设计与「要改的地方」落到我们自己的代码上（任务 3 的 Python 侧重构 + 任务 4 的 C++ 复刻，推进顺序见 [`../../@20260923_mujoco/README.md`](../../@20260923_mujoco/README.md)）：
 
-- `../../@20260923_mujoco/cpp/src/main.cpp`：C++ 程序，头部注释就引用了本文；当前完成到工具链 + 模型加载 + 零力矩静止判定。
+- `../../@20260923_mujoco/cpp_task2/src/main.cpp`：**任务 2 的 C++ 版**（读 `rest` keyframe、零力矩跑 N 秒、打印漂移/末态速度/接触点数，数字与 Python 侧一致）；`../../@20260923_mujoco/cpp/` 是任务 4 的落点，等着把 `python/` 的双缓冲结构复刻过去。
 - `../../@20260923_mujoco/python/`：**任务 3 的落点**（`simulator.py` 双缓冲 + `physics`/渲染两条线程、`control.py` 控制输入、`main.py` 入口）。改的就是 §7 的第 1、2、8 条：物理线程独占 `mjData`、锁只罩 memcpy、deadline pacing；实测渲染 20 ms/次时仍是 499 步/秒（实时 0.998x），同样条件下的上游式单锁写法只有 271 步/秒（0.542x），且物理结果与单线程裸循环逐位相同（复核：`scripts/agent_scripts/physics_pacing.py`）。
 - `../../@20260923_mujoco/scripts/simulate.py` / `simulate_record.py`：任务 2 的最小仿真循环与录像，**仍保留作对照**（迁移与清理另开一步）。

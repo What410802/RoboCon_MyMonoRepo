@@ -21,11 +21,8 @@ import zlib
 
 import mujoco
 
-# 脚本可能被放在 scripts/ 下任意层级，向上找**同时**含 scenes/ 与 models/ 的目录
-ROOT = next(
-    p for p in pathlib.Path(__file__).resolve().parents
-    if (p / "scenes").is_dir() and (p / "models").is_dir()
-)
+# 本文件在 scripts/visualization/ 下：往上 2 层就是任务目录（成品代码写死层数，不做向上查找）
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 # 注意：本场景自带 <keyframe name="rest">；下面若有 keyframe 就把它当初始位形
 # （所以默认截图是“趴卧”姿态，而不是站立位形）。换场景时这个依赖会变。
 SCENE = ROOT / "scenes/flat_scene.xml"

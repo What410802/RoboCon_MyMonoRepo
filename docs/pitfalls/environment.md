@@ -120,6 +120,7 @@ curl -s -o /dev/null -m 10 -w '%{http_code} %{speed_download}\n' "$FILE_URL"
 - 仓库把 `MUJOCO_GL=egl` 写进 `pixi.toml` 的 `[activation.env]`，对所有脚本生效； 临时换后端要 `pixi run env MUJOCO_GL=glfw python …`（命令行前缀会被激活环境覆盖）。
 - 本机显卡算力（Pascal sm_61 + 驱动 580）**不够跑 MJX / MJWarp**，所以只用 CPU 仿真。
 - 本机特有的小现象：开窗口的进程退出时偶发 `segmentation fault` 或 `GLFWError: EGL: Failed to clear current context`（MP4 在崩溃前已写完，产物不受影响）； Wayland/XWayland 会把 GLFW 的窗口位置警告打到 stderr。
+- **离屏渲染的帧尺寸不等于请求的窗口尺寸**：本机显示缩放（GNOME 分数缩放）会让 `glfwCreateWindow(960, 540)` 拿到 **1280×720** 的 framebuffer——实测请求 960×540 与 320×180 拿到的都是 1280×720。所以自己起 GL 上下文做离屏录像时（`cpp_task2/src/record.h`），必须用 `mjr_maxViewport()` 的**实际**视口告诉 ffmpeg 每帧多少字节，再 `scale` 到目标尺寸；若按请求尺寸写，帧就对不齐（现象：写进 191 帧的 raw 流被 ffmpeg 读成 339 帧、时长 6.78 s）。
 - 这些结论**驱动了哪些配置**（反向索引）：见 [`../learn/mujoco.md` 第 7.6 节](../learn/mujoco.md#76-这些结论驱动了哪些配置决策)。
 
 ## 2026-09-25 C++ 工具链（pixi 提供）与编辑器提示

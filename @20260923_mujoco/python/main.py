@@ -18,11 +18,8 @@ import mujoco
 from control import ZeroTorque
 from simulator import Simulator
 
-# 脚本换个位置也能跑：向上找**同时**含 scenes/ 与 models/ 的目录
-ROOT = next(
-    p for p in Path(__file__).resolve().parents
-    if (p / "scenes").is_dir() and (p / "models").is_dir()
-)
+# 本文件在 python/ 下，上一层就是任务目录（成品代码写死层数，不做向上查找）
+ROOT = Path(__file__).resolve().parents[1]
 SCENE = ROOT / "scenes/flat_scene.xml"
 
 

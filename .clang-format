@@ -1,0 +1,6 @@
+# C/C++ 与 CMake 的缩进统一：4 空格、不用 Tab（见 docs/conventions.md §3）。
+# 用法：clang-format -i <file>；ColumnLimit: 0 = 不自动折行，保留按意思换的行。
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+ColumnLimit: 0

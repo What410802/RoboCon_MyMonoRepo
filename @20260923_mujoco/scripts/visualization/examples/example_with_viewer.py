@@ -82,11 +82,8 @@ from visualization import CAMERAS, VideoRecorder  # noqa: E402
 
 HERE = pathlib.Path(__file__).resolve().parent      # scripts/visualization/examples/
 
-# 脚本可能被放在 scripts/ 下任意层级，向上找**同时**含 scenes/ 与 models/ 的目录
-ROOT = next(
-    p for p in pathlib.Path(__file__).resolve().parents
-    if (p / "scenes").is_dir() and (p / "models").is_dir()
-)
+# 本文件在 scripts/visualization/examples/ 下：往上 3 层就是任务目录（写死层数，不做向上查找）
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 def main() -> int:
